@@ -1,9 +1,9 @@
-use crate::application::WorkspaceRepository;
+use rkflash_application::WorkspaceRepository;
 use rkflash_config::{decode_workspace, encode_workspace, WorkspaceConfig};
 use std::fs;
 use std::path::Path;
 
-pub(crate) struct JsonConfigurationRepository;
+pub struct JsonConfigurationRepository;
 
 impl WorkspaceRepository for JsonConfigurationRepository {
     fn load_workspace(&self, path: &Path) -> Result<WorkspaceConfig, String> {

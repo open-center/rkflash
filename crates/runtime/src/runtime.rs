@@ -1,20 +1,20 @@
 //! 外部工具的串行执行、日志、取消与设备轮询。
 
-use super::command::{configure_tool_process, format_command, terminate_tool_process};
+use super::command::{configure_tool_process, format_command};
 #[cfg(test)]
 use super::logging::resolve_tool_log_directory;
 use super::logging::{
     append_log_lines, create_log_file, initial_tool_log_directory, next_operation_log_path,
-    prepare_log_redirect, purge_stale_runtime_directories, remove_runtime_directory,
-    runtime_tool_home_directory,
+    purge_stale_runtime_directories, remove_runtime_directory, runtime_tool_home_directory,
 };
-use super::monitor::spawn_device_poller;
+use super::monitor::{spawn_device_poller, DevicePoller};
 use super::terminal::sanitize_terminal_text;
-use crate::application::{
-    DeviceMonitor, OperationExecutor, OperationLog, ToolLocator, ToolProtocol,
-};
-use crate::domain::{
+use crate::host::{OsHost, ToolProcessContext};
+use rkflash_application::domain::{
     CommandSpec, DeviceSnapshot, ExecutionEvent, ExecutionPlan, ToolOutcome, ToolSession, Workflow,
+};
+use rkflash_application::{
+    DeviceMonitor, OperationExecutor, OperationLog, ToolLocator, ToolProtocol,
 };
 use std::ffi::OsString;
 use std::io::Read;
@@ -25,7 +25,8 @@ use std::sync::{mpsc, Arc, Mutex, MutexGuard, TryLockError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-pub(crate) struct ProcessRuntime {
+pub struct ProcessRuntime {
+    host: Arc<dyn OsHost>,
     tool_path: Arc<Mutex<Option<PathBuf>>>,
     tool_log_directory: Mutex<PathBuf>,
     tool_home_directory: PathBuf,
@@ -71,21 +72,25 @@ struct RunContext {
     child_slot: Arc<Mutex<Option<Child>>>,
     command_gate: Arc<Mutex<()>>,
     protocol: Arc<dyn ToolProtocol>,
+    host: Arc<dyn OsHost>,
     tool_home_directory: PathBuf,
     tool_log_directory: PathBuf,
     operation_log_state: Arc<Mutex<OperationLogState>>,
 }
 
 impl ProcessRuntime {
-    pub(crate) fn new(
+    /// `tool_log_relative_path` 是外部工具在 HOME 下写内部日志的固定相对路径。
+    pub fn new(
         tool_path: Option<PathBuf>,
         protocol: Arc<dyn ToolProtocol>,
         tool_log_relative_path: PathBuf,
+        host: Arc<dyn OsHost>,
     ) -> Self {
         let tool_path = Arc::new(Mutex::new(tool_path));
         let tool_home_directory = runtime_tool_home_directory();
-        purge_stale_runtime_directories(&tool_home_directory);
+        purge_stale_runtime_directories(host.as_ref(), &tool_home_directory);
         let tool_log_directory = Mutex::new(initial_tool_log_directory(
+            host.as_ref(),
             &tool_home_directory,
             &tool_log_relative_path,
         ));
@@ -96,16 +101,20 @@ impl ProcessRuntime {
         let (device_tx, device_rx) = mpsc::channel();
 
         spawn_device_poller(
-            Arc::clone(&tool_path),
-            tool_home_directory.clone(),
-            Arc::clone(&active),
-            Arc::clone(&command_gate),
-            Arc::clone(&stop_poller),
-            Arc::clone(&protocol),
+            DevicePoller {
+                tool_path: Arc::clone(&tool_path),
+                tool_home_directory: tool_home_directory.clone(),
+                active: Arc::clone(&active),
+                command_gate: Arc::clone(&command_gate),
+                stop: Arc::clone(&stop_poller),
+                protocol: Arc::clone(&protocol),
+                host: Arc::clone(&host),
+            },
             device_tx,
         );
 
         Self {
+            host,
             tool_path,
             tool_log_directory,
             tool_home_directory,
@@ -168,7 +177,7 @@ impl OperationLog for ProcessRuntime {
         if self.active.load(Ordering::Acquire) {
             return Err("当前任务运行期间不能切换工具日志目录".to_owned());
         }
-        let path = prepare_log_redirect(
+        let path = self.host.prepare_log_redirect(
             &self.tool_home_directory,
             &self.tool_log_relative_path,
             &path,
@@ -178,9 +187,14 @@ impl OperationLog for ProcessRuntime {
     }
 
     fn begin_operation_log(&self, operation: &str) -> Result<PathBuf, String> {
-        let path = next_operation_log_path(&self.tool_log_directory())?;
+        let path = next_operation_log_path(self.host.as_ref(), &self.tool_log_directory())?;
         let mut file = create_log_file(&path)?;
-        append_log_lines(&mut file, "INFO", &format!("开始操作：{operation}"))?;
+        append_log_lines(
+            self.host.as_ref(),
+            &mut file,
+            "INFO",
+            &format!("开始操作：{operation}"),
+        )?;
         let mut state = lock_or_recover(&self.operation_log_state);
         state.active = Some(OperationLogFile {
             path: path.clone(),
@@ -205,7 +219,7 @@ impl OperationLog for ProcessRuntime {
     fn append_operation_log(&self, level: &str, text: &str) -> Result<(), String> {
         let mut state = lock_or_recover(&self.operation_log_state);
         match state.active.as_mut() {
-            Some(log) => append_log_lines(&mut log.file, level, text),
+            Some(log) => append_log_lines(self.host.as_ref(), &mut log.file, level, text),
             None => Ok(()),
         }
     }
@@ -241,6 +255,7 @@ impl OperationExecutor for ProcessRuntime {
             child_slot: Arc::clone(&self.child),
             command_gate: Arc::clone(&self.command_gate),
             protocol: Arc::clone(&self.protocol),
+            host: Arc::clone(&self.host),
             tool_home_directory: self.tool_home_directory.clone(),
             tool_log_directory: self.tool_log_directory(),
             operation_log_state: Arc::clone(&self.operation_log_state),
@@ -256,7 +271,7 @@ impl OperationExecutor for ProcessRuntime {
         self.cancelled.store(true, Ordering::Release);
         let mut slot = lock_or_recover(&self.child);
         if let Some(child) = slot.as_mut() {
-            terminate_tool_process(child);
+            self.host.terminate_tool_process(child);
         }
     }
 
@@ -287,6 +302,7 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
         child_slot,
         command_gate,
         protocol,
+        host,
         tool_home_directory,
         tool_log_directory,
         operation_log_state,
@@ -309,6 +325,7 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
         cancelled: &cancelled,
         child_slot: &child_slot,
         protocol: &protocol,
+        host: host.as_ref(),
         progress_range: Arc::new(Mutex::new((0.0, 1.0))),
     };
     let task_name = plan.name.clone();
@@ -388,6 +405,7 @@ struct StepRunner<'a> {
     cancelled: &'a AtomicBool,
     child_slot: &'a Mutex<Option<Child>>,
     protocol: &'a Arc<dyn ToolProtocol>,
+    host: &'a dyn OsHost,
     /// 工具自身 0–100% 的进度映射到整体进度的区间。
     progress_range: Arc<Mutex<(f32, f32)>>,
 }
@@ -416,10 +434,13 @@ impl StepRunner<'_> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         configure_tool_process(
+            self.host,
             &mut process,
-            self.tool_path,
-            self.tool_home_directory,
-            Some(self.tool_log_directory),
+            &ToolProcessContext {
+                tool_path: self.tool_path,
+                tool_home_directory: self.tool_home_directory,
+                tool_log_directory: Some(self.tool_log_directory),
+            },
         );
         let mut child = process
             .spawn()
@@ -458,7 +479,7 @@ impl StepRunner<'_> {
         let exit_status = loop {
             if self.cancelled.load(Ordering::Acquire) {
                 if let Some(child) = lock_or_recover(self.child_slot).as_mut() {
-                    terminate_tool_process(child);
+                    self.host.terminate_tool_process(child);
                 }
             }
             let status = lock_or_recover(self.child_slot)
@@ -622,39 +643,76 @@ fn spawn_output_reader(
 #[cfg(test)]
 mod tests {
     use super::{
-        prepare_log_redirect, resolve_tool_log_directory, run_plan, runtime_tool_home_directory,
-        sanitize_terminal_text, ProcessRuntime, RunContext,
+        resolve_tool_log_directory, run_plan, runtime_tool_home_directory, sanitize_terminal_text,
+        ProcessRuntime, RunContext,
     };
-    use crate::application::{OperationLog, ToolProtocol};
-    use crate::domain::{CommandSpec, DeviceSnapshot, ExecutionEvent, ExecutionPlan};
-    use std::path::PathBuf;
+    use crate::host::{LocalTime, OsHost, ToolProcessContext};
+    use rkflash_application::domain::{CommandSpec, DeviceSnapshot, ExecutionEvent, ExecutionPlan};
+    use rkflash_application::{OperationLog, ToolProtocol};
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, Command};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{mpsc, Arc, Mutex};
 
     struct TestProtocol;
 
-    #[cfg(unix)]
-    #[test]
-    fn configures_external_tool_home_without_changing_its_working_directory_contract() {
-        use super::configure_tool_process;
+    /// 系统自带的 shell：输出一行文本后以 0 退出，用于模拟“输出失败但退出码为 0”的工具。
+    fn shell_path() -> PathBuf {
+        if std::env::consts::FAMILY == "windows" {
+            PathBuf::from("cmd")
+        } else {
+            PathBuf::from("/bin/sh")
+        }
+    }
 
-        let mut command = std::process::Command::new("/opt/rkflash/tool");
-        configure_tool_process(
-            &mut command,
-            std::path::Path::new("/opt/rkflash/tool"),
-            std::path::Path::new("/tmp/rkflash-dev"),
-            None,
-        );
+    fn shell_echo_args(text: &str) -> Vec<String> {
+        if std::env::consts::FAMILY == "windows" {
+            vec!["/C".to_owned(), format!("echo {text}")]
+        } else {
+            vec!["-c".to_owned(), format!("printf '{text}\\n'; exit 0")]
+        }
+    }
 
-        assert_eq!(
-            command.get_current_dir(),
-            Some(std::path::Path::new("/opt/rkflash"))
-        );
-        let home = command
-            .get_envs()
-            .find(|(name, _)| *name == "HOME")
-            .and_then(|(_, value)| value);
-        assert_eq!(home, Some(std::ffi::OsStr::new("/tmp/rkflash-dev")));
+    /// 不依赖具体操作系统的宿主：直接在日志目录写入，时间固定。
+    struct TestHost;
+
+    impl OsHost for TestHost {
+        fn configure_tool_process(
+            &self,
+            _command: &mut Command,
+            _context: &ToolProcessContext<'_>,
+        ) {
+        }
+
+        fn terminate_tool_process(&self, child: &mut Child) {
+            let _ = child.kill();
+        }
+
+        fn process_has_exited(&self, _pid: &str) -> bool {
+            false
+        }
+
+        fn local_time(&self) -> Option<LocalTime> {
+            Some(LocalTime {
+                year: 2026,
+                month: 11,
+                day: 2,
+                hour: 18,
+                minute: 30,
+                second: 45,
+                millis: 127,
+            })
+        }
+
+        fn prepare_log_redirect(
+            &self,
+            _tool_home_directory: &Path,
+            _tool_log_relative_path: &Path,
+            log_directory: &Path,
+        ) -> Result<PathBuf, String> {
+            std::fs::create_dir_all(log_directory).map_err(|error| error.to_string())?;
+            Ok(log_directory.to_path_buf())
+        }
     }
 
     #[test]
@@ -702,19 +760,17 @@ mod tests {
             child_slot: Arc::new(Mutex::new(None)),
             command_gate: Arc::new(Mutex::new(())),
             protocol: Arc::new(TestProtocol),
+            host: Arc::new(TestHost),
             tool_home_directory: PathBuf::from("/tmp/rkflash-test-home"),
             tool_log_directory: PathBuf::from("/tmp/rkflash-test-log"),
             operation_log_state: Arc::new(Mutex::new(Default::default())),
         };
         let plan = ExecutionPlan::single(
             "读取 Flash ID",
-            CommandSpec::new(
-                "读取 Flash ID",
-                ["-c", "printf 'Read flash ID Fail!\\n'; exit 0"],
-            ),
+            CommandSpec::new("读取 Flash ID", shell_echo_args("Read flash ID Fail!")),
         );
 
-        run_plan(PathBuf::from("/bin/sh"), plan, context);
+        run_plan(shell_path(), plan, context);
 
         let finished = rx.try_iter().find_map(|event| match event {
             ExecutionEvent::TaskFinished {
@@ -749,32 +805,13 @@ mod tests {
     }
 
     #[test]
-    fn maps_vendor_tool_fixed_log_path_to_selected_directory() {
-        let tool_home = runtime_tool_home_directory();
-        let selected_log_directory = tool_home.with_extension("selected-log");
-        let active_log_directory = prepare_log_redirect(
-            &tool_home,
-            std::path::Path::new("vendor-tool/log"),
-            &selected_log_directory,
-        )
-        .expect("log redirect");
-
-        assert_eq!(
-            std::fs::read_link(tool_home.join("vendor-tool/log")).expect("log symlink"),
-            active_log_directory
-        );
-
-        std::fs::remove_dir_all(&tool_home).expect("remove test tool home");
-        std::fs::remove_dir_all(&selected_log_directory).expect("remove test log directory");
-    }
-
-    #[test]
     fn creates_one_timestamped_log_for_each_operation() {
         let directory = runtime_tool_home_directory().with_extension("operation-log");
         let runtime = ProcessRuntime::new(
             None,
             Arc::new(TestProtocol),
             PathBuf::from("vendor-tool/log"),
+            Arc::new(TestHost),
         );
         runtime
             .set_tool_log_directory(directory.clone())
@@ -786,6 +823,7 @@ mod tests {
             .file_name()
             .and_then(|name| name.to_str())
             .expect("UTF-8 log name");
+        assert!(file_name.starts_with("20261102-183045-127"));
         assert!(file_name.ends_with(".log"));
         assert_eq!(file_name.len(), 23);
         assert_eq!(&file_name[8..9], "-");

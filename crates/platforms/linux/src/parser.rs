@@ -1,6 +1,6 @@
 //! `upgrade_tool` 设备列表解析；进度与失败识别位于 rkflash-core。
 
-use crate::domain::{DeviceInfo, DeviceSnapshot};
+use rkflash_application::domain::{DeviceInfo, DeviceSnapshot};
 
 pub(super) fn parse_device_list(text: &str) -> DeviceSnapshot {
     let mut devices = Vec::new();

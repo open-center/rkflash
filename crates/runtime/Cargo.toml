@@ -1,0 +1,11 @@
+[package]
+name = "rkflash-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "RKFlash generic runtime: tool process execution, device polling, logs and persistence"
+
+[dependencies]
+rkflash-application.workspace = true
+rkflash-config.workspace = true

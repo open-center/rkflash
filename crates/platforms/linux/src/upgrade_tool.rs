@@ -1,19 +1,46 @@
-use super::parameter::parse_parameter;
-use super::parser::parse_device_list;
-use super::profile::RockchipProfile;
-use crate::application::{FlashPlanner, FlashProfile, ToolProtocol};
-use crate::domain::{
+//! Rockchip 官方 upgrade_tool 的命令规划与输出协议（Linux 版使用）。
+
+use crate::parser::parse_device_list;
+use rkflash_application::domain::{
     normalize_sector, CommandSpec, DeviceControl, DeviceQuery, DeviceSnapshot, ExecutionPlan,
-    FlashOperation,
+    FlashOperation, StorageType,
 };
+use rkflash_application::{FlashPlanner, ToolProtocol};
 use rkflash_config::ImageEntry;
 use rkflash_core::output::{extract_failure, extract_progress};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-#[derive(Default)]
-pub(crate) struct UpgradeToolAdapter {
-    profile: RockchipProfile,
+#[derive(Default, Clone)]
+pub struct UpgradeToolAdapter;
+
+/// upgrade_tool `DI` 命令按分区名写入时使用的参数。
+const PARTITION_FLAGS: &[(&str, &str)] = &[
+    ("parameter", "-p"),
+    ("uboot", "-u"),
+    ("trust", "-t"),
+    ("misc", "-m"),
+    ("resource", "-re"),
+    ("kernel", "-k"),
+    ("boot", "-b"),
+    ("recovery", "-r"),
+    ("system", "-s"),
+];
+
+fn partition_flag(name: &str) -> Option<&'static str> {
+    PARTITION_FLAGS
+        .iter()
+        .find_map(|(partition, flag)| (*partition == name).then_some(*flag))
+}
+
+/// `UL` 命令的目标存储参数；自动时不传，由工具识别。
+fn storage_token(storage: StorageType) -> Option<&'static str> {
+    match storage {
+        StorageType::Auto => None,
+        StorageType::Emmc => Some("EMMC"),
+        StorageType::SpiNor => Some("SPINOR"),
+        StorageType::SpiNand => Some("SPINAND"),
+    }
 }
 
 /// 扇区参数统一走域层校验后下发，杜绝把原始输入直接交给破坏性命令。
@@ -53,7 +80,7 @@ impl FlashPlanner for UpgradeToolAdapter {
             FlashOperation::Control(control) => Ok(self.control_plan(*control)),
             FlashOperation::UpgradeLoader { loader, storage } => {
                 let mut args = vec![OsString::from("UL"), loader.as_os_str().to_owned()];
-                if let Some(token) = self.profile.storage_token(*storage) {
+                if let Some(token) = storage_token(*storage) {
                     args.push(OsString::from(token));
                 }
                 Ok(ExecutionPlan::single(
@@ -114,16 +141,6 @@ impl FlashPlanner for UpgradeToolAdapter {
     }
 }
 
-impl FlashProfile for UpgradeToolAdapter {
-    fn default_images(&self) -> Vec<ImageEntry> {
-        self.profile.default_images()
-    }
-
-    fn parse_parameter(&self, text: &str) -> Result<Vec<ImageEntry>, String> {
-        parse_parameter(text)
-    }
-}
-
 impl ToolProtocol for UpgradeToolAdapter {
     fn device_scan_command(&self) -> CommandSpec {
         CommandSpec::new("扫描 Rockusb 设备", ["LD"])
@@ -143,7 +160,7 @@ impl ToolProtocol for UpgradeToolAdapter {
 }
 
 impl UpgradeToolAdapter {
-    pub(crate) fn runtime_log_relative_path() -> PathBuf {
+    pub fn runtime_log_relative_path() -> PathBuf {
         PathBuf::from("upgrade_tool/log")
     }
 
@@ -155,7 +172,7 @@ impl UpgradeToolAdapter {
         let mut commands = Vec::new();
         for image in images.iter().filter(|image| image.enabled) {
             let name = image.name.to_ascii_lowercase();
-            if let Some(flag) = self.profile.partition_flag(&name) {
+            if let Some(flag) = partition_flag(&name) {
                 commands.push(CommandSpec::new(
                     format!("写入 {}", image.name),
                     [
@@ -210,14 +227,14 @@ impl UpgradeToolAdapter {
 #[cfg(test)]
 mod tests {
     use super::UpgradeToolAdapter;
-    use crate::application::FlashPlanner;
-    use crate::domain::{DeviceQuery, FlashOperation, StorageType};
+    use rkflash_application::domain::{DeviceQuery, FlashOperation, StorageType};
+    use rkflash_application::FlashPlanner;
     use rkflash_config::ImageEntry;
     use std::path::PathBuf;
 
     #[test]
     fn download_mapping_is_driven_by_rockchip_profile() {
-        let adapter = UpgradeToolAdapter::default();
+        let adapter = UpgradeToolAdapter;
         let mut boot = ImageEntry::new(true, "0x20000", "boot");
         boot.path = "boot.img".to_owned();
         let mut vendor = ImageEntry::new(true, "0x50000", "vendor");
@@ -242,7 +259,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_custom_partition_address_before_planning() {
-        let adapter = UpgradeToolAdapter::default();
+        let adapter = UpgradeToolAdapter;
         let mut entry = ImageEntry::new(true, "0xZZZZ", "custom");
         entry.path = "custom.img".to_owned();
 
@@ -257,7 +274,7 @@ mod tests {
 
     #[test]
     fn storage_specialization_stays_in_adapter() {
-        let adapter = UpgradeToolAdapter::default();
+        let adapter = UpgradeToolAdapter;
         let plan = adapter
             .plan(&FlashOperation::UpgradeLoader {
                 loader: PathBuf::from("MiniLoaderAll.bin"),
@@ -270,7 +287,7 @@ mod tests {
 
     #[test]
     fn query_does_not_change_device_mode() {
-        let adapter = UpgradeToolAdapter::default();
+        let adapter = UpgradeToolAdapter;
         let plan = adapter
             .plan(&FlashOperation::Query {
                 query: DeviceQuery::FlashId,
@@ -283,7 +300,7 @@ mod tests {
 
     #[test]
     fn serial_number_query_uses_usb_enumeration_value() {
-        let adapter = UpgradeToolAdapter::default();
+        let adapter = UpgradeToolAdapter;
         let plan = adapter
             .plan(&FlashOperation::Query {
                 query: DeviceQuery::UsbSerialNumber,

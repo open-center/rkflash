@@ -4,6 +4,6 @@ mod execution;
 mod persistence;
 mod planning;
 
-pub(crate) use execution::{DeviceMonitor, OperationExecutor, OperationLog, ToolLocator};
-pub(crate) use persistence::{FileSystem, WorkspaceRepository};
-pub(crate) use planning::{FlashPlanner, FlashProfile, ToolProtocol};
+pub use execution::{DeviceMonitor, OperationExecutor, OperationLog, ToolLocator};
+pub use persistence::{FileSystem, WorkspaceRepository};
+pub use planning::{FlashPlanner, FlashProfile, ToolProtocol};

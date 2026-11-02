@@ -12,7 +12,7 @@ use rkflash_api::{
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-pub(crate) struct ApplicationPorts {
+pub struct ApplicationPorts {
     pub executor: Rc<dyn OperationExecutor>,
     pub device_monitor: Rc<dyn DeviceMonitor>,
     pub tool_locator: Rc<dyn ToolLocator>,
@@ -36,7 +36,7 @@ pub struct FlashApplication {
 }
 
 impl FlashApplication {
-    pub(crate) fn new(ports: ApplicationPorts) -> Self {
+    pub fn new(ports: ApplicationPorts) -> Self {
         Self {
             executor: ports.executor,
             device_monitor: ports.device_monitor,

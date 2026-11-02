@@ -262,38 +262,14 @@ sudo dpkg --install ../../output/dist/rkflash_<版本>_amd64.deb
 
 ## 工程结构
 
-```text
-crates/                         # 所有 Rust 源码统一归档在此目录
-├── api/                     # 前后端唯一共享契约：能力接口、操作与状态类型
-├── backend/                 # 完整后端分层；实现 api 能力端口并装配具体适配器
-│   └── src/
-│       ├── application/     # 门面、用例规则和按职责拆分的输入/输出端口
-│       │   └── ports/       # 执行、监控、工具、日志、规划、仓储和文件系统接口
-│       ├── domain/          # 后端内部执行计划；公共类型来自 api
-│       └── infrastructure/
-│           ├── process/     # 命令、监控、日志、终端清洗与任务运行时
-│           ├── persistence/ # 工作区仓储与本地文件系统适配器
-│           └── rockchip/    # upgrade_tool 命令、解析与平台配置
-├── config/                  # 镜像/工作区模型与 JSON codec
-├── frontend/                # egui 桌面交付层
-│   └── src/desktop/
-│       ├── pages/           # 下载、升级、高级功能页面
-│       ├── actions.rs       # 前端动作到应用用例的转换
-│       ├── chrome.rs        # 顶部导航、设备状态与运行终端外壳
-│       ├── components.rs    # 通用 UI 组件
-│       ├── layout.rs        # 内容驱动的响应式布局策略
-│       ├── overlays.rs      # 错误、设备提示和高风险确认浮层
-│       └── theme.rs         # 视觉系统与中文字体加载
-└── launcher/                # rkflash 二进制；只负责装配后端与桌面前端
-```
-
-完整依赖规则和扩展方式见 [分层架构说明](../../docs/分层架构.md)。运行
+Rust 工作区位于仓库根目录，Linux 版由通用分层加 `crates/platforms/linux`（upgrade_tool 适配器与
+Unix 进程/日志实现）组成，完整说明见 [分层架构](../../docs/分层架构.md)。运行
 `./build.sh architecture` 可单独检查边界，构建安装包时也会自动执行同一门禁。
 
 ## 设计原则
 
-- `frontend` 只依赖独立的 `api` 契约，不依赖 `backend`，不构造命令行、不启动进程。
-- `backend` 实现 `api` 的 `FlashService` 能力端口；具体适配器不会暴露给前端。
+- `frontend` 只依赖独立的 `api` 契约，不构造命令行、不启动进程。
+- `application` 实现 `api` 的 `FlashService` 能力端口；工具适配器与操作系统差异位于 `platforms/linux`，不会暴露给前端。
 - `api` 和 `config` 不依赖文件系统、进程、设备访问或 UI 框架。
 - 通用执行逻辑与 Rockchip 特殊配置分开；后续改为 Rust 原生 RockUSB 时，不需要重写页面。
 - 不把闭源二进制提交进源码仓库。

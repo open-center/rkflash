@@ -1,10 +1,10 @@
 //! 本地文件系统适配器；应用层不直接调用 `std::fs`。
 
-use crate::application::FileSystem;
+use rkflash_application::FileSystem;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) struct LocalFileSystem;
+pub struct LocalFileSystem;
 
 impl FileSystem for LocalFileSystem {
     fn read_text(&self, path: &Path) -> Result<String, String> {

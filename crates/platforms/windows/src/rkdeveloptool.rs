@@ -1,15 +1,14 @@
 //! rkdeveloptool 后端适配器：把类型化操作映射为 rkflash-core 的命令与工作流（Windows 版使用）。
 
-use super::parameter::parse_parameter;
-use super::profile::RockchipProfile;
-use crate::application::{FlashPlanner, FlashProfile, ToolProtocol};
-use crate::domain::{
+use rkflash_application::domain::{
     normalize_sector, CommandSpec, DeviceControl, DeviceInfo, DeviceQuery, DeviceSnapshot,
     ExecutionPlan, FlashOperation, StorageType,
 };
+use rkflash_application::{FlashPlanner, ToolProtocol};
 use rkflash_config::ImageEntry;
 use rkflash_core::firmware;
 use rkflash_core::output::extract_progress;
+use rkflash_core::partition::is_standard_partition;
 use rkflash_core::rkdeveloptool::{self as protocol, Storage};
 use rkflash_core::workflow::{
     DownloadItem, DownloadTarget, DownloadWorkflow, EraseFlashWorkflow, FirmwareUpgradeWorkflow,
@@ -19,10 +18,8 @@ use std::path::PathBuf;
 
 const UNSUPPORTED: &str = "rkdeveloptool 不支持该操作";
 
-#[derive(Default)]
-pub(crate) struct RkDevelopToolAdapter {
-    profile: RockchipProfile,
-}
+#[derive(Default, Clone)]
+pub struct RkDevelopToolAdapter;
 
 fn sector_arg(value: &str, label: &str) -> Result<OsString, String> {
     normalize_sector(value)
@@ -170,8 +167,7 @@ impl RkDevelopToolAdapter {
             if image.path.trim().is_empty() {
                 return Err(format!("分区“{}”未选择镜像文件", image.name));
             }
-            let lower = image.name.trim().to_ascii_lowercase();
-            let target = if self.profile.partition_flag(&lower).is_some() {
+            let target = if is_standard_partition(&image.name) {
                 DownloadTarget::Partition(image.name.trim().to_owned())
             } else {
                 if image.address.trim().is_empty() {
@@ -194,18 +190,8 @@ impl RkDevelopToolAdapter {
         Ok(items)
     }
 
-    pub(crate) fn runtime_log_relative_path() -> PathBuf {
+    pub fn runtime_log_relative_path() -> PathBuf {
         PathBuf::from("log")
-    }
-}
-
-impl FlashProfile for RkDevelopToolAdapter {
-    fn default_images(&self) -> Vec<ImageEntry> {
-        self.profile.default_images()
-    }
-
-    fn parse_parameter(&self, text: &str) -> Result<Vec<ImageEntry>, String> {
-        parse_parameter(text)
     }
 }
 
@@ -250,7 +236,7 @@ mod tests {
 
     #[test]
     fn maps_queries_and_rejects_unsupported_operations() {
-        let adapter = RkDevelopToolAdapter::default();
+        let adapter = RkDevelopToolAdapter;
         let plan = adapter
             .plan(&FlashOperation::Query {
                 query: DeviceQuery::PartitionTable,
@@ -271,7 +257,7 @@ mod tests {
 
     #[test]
     fn loader_upgrade_selects_storage_first() {
-        let adapter = RkDevelopToolAdapter::default();
+        let adapter = RkDevelopToolAdapter;
         let plan = adapter
             .plan(&FlashOperation::UpgradeLoader {
                 loader: PathBuf::from("MiniLoaderAll.bin"),
@@ -289,7 +275,7 @@ mod tests {
 
     #[test]
     fn download_uses_partition_names_for_known_images_and_sectors_otherwise() {
-        let adapter = RkDevelopToolAdapter::default();
+        let adapter = RkDevelopToolAdapter;
         let mut boot = ImageEntry::new(true, "0x20000", "boot");
         boot.path = "boot.img".to_owned();
         let mut custom = ImageEntry::new(true, "0x50000", "vendor");
@@ -304,7 +290,7 @@ mod tests {
 
     #[test]
     fn protocol_delegates_device_and_progress_parsing_to_core() {
-        let adapter = RkDevelopToolAdapter::default();
+        let adapter = RkDevelopToolAdapter;
         let snapshot =
             adapter.parse_device_list("DevNo=1\tVid=0x2207,Pid=0x350b,LocationID=104\tMaskrom");
         assert_eq!(snapshot.devices[0].mode, "Maskrom");

@@ -2611,8 +2611,9 @@ dependencies = [
 name = "rkflash"
 version = "0.4.1"
 dependencies = [
- "rkflash-backend",
  "rkflash-frontend",
+ "rkflash-platform-linux",
+ "rkflash-platform-windows",
 ]
 
 [[package]]
@@ -2623,14 +2624,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "rkflash-backend"
+name = "rkflash-application"
 version = "0.4.1"
 dependencies = [
- "libc",
  "rkflash-api",
  "rkflash-config",
  "rkflash-core",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2653,6 +2652,36 @@ dependencies = [
  "image",
  "rfd",
  "rkflash-api",
+]
+
+[[package]]
+name = "rkflash-platform-linux"
+version = "0.4.1"
+dependencies = [
+ "libc",
+ "rkflash-application",
+ "rkflash-config",
+ "rkflash-core",
+ "rkflash-runtime",
+]
+
+[[package]]
+name = "rkflash-platform-windows"
+version = "0.4.1"
+dependencies = [
+ "rkflash-application",
+ "rkflash-config",
+ "rkflash-core",
+ "rkflash-runtime",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rkflash-runtime"
+version = "0.4.1"
+dependencies = [
+ "rkflash-application",
+ "rkflash-config",
 ]
 
 [[package]]

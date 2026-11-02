@@ -1,8 +1,9 @@
 //! 只读设备轮询适配器；扫描不会隐式切换设备模式。
 
-use super::command::{configure_tool_process, terminate_tool_process};
-use crate::application::ToolProtocol;
-use crate::domain::DeviceSnapshot;
+use super::command::configure_tool_process;
+use crate::host::{OsHost, ToolProcessContext};
+use rkflash_application::domain::DeviceSnapshot;
+use rkflash_application::ToolProtocol;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,15 +15,28 @@ use std::time::{Duration, Instant};
 /// 超时后按进程组终止，保证轮询线程和后续任务不会被卡死。
 const SCAN_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(super) fn spawn_device_poller(
-    tool_path: Arc<Mutex<Option<PathBuf>>>,
-    tool_home_directory: PathBuf,
-    active: Arc<AtomicBool>,
-    command_gate: Arc<Mutex<()>>,
-    stop: Arc<AtomicBool>,
-    protocol: Arc<dyn ToolProtocol>,
-    tx: mpsc::Sender<DeviceSnapshot>,
-) {
+/// 设备轮询线程与运行时共享的状态。
+pub(super) struct DevicePoller {
+    pub tool_path: Arc<Mutex<Option<PathBuf>>>,
+    pub tool_home_directory: PathBuf,
+    /// 有任务执行时暂停轮询，避免与任务争用 USB 设备。
+    pub active: Arc<AtomicBool>,
+    pub command_gate: Arc<Mutex<()>>,
+    pub stop: Arc<AtomicBool>,
+    pub protocol: Arc<dyn ToolProtocol>,
+    pub host: Arc<dyn OsHost>,
+}
+
+pub(super) fn spawn_device_poller(poller: DevicePoller, tx: mpsc::Sender<DeviceSnapshot>) {
+    let DevicePoller {
+        tool_path,
+        tool_home_directory,
+        active,
+        command_gate,
+        stop,
+        protocol,
+        host,
+    } = poller;
     thread::spawn(move || {
         while !stop.load(Ordering::Acquire) {
             if !active.load(Ordering::Acquire) {
@@ -32,6 +46,7 @@ pub(super) fn spawn_device_poller(
                     .clone();
                 let snapshot = match path {
                     Some(path) => scan_devices(
+                        host.as_ref(),
                         &path,
                         &tool_home_directory,
                         protocol.as_ref(),
@@ -58,6 +73,7 @@ pub(super) fn spawn_device_poller(
 }
 
 fn scan_devices(
+    host: &dyn OsHost,
     tool_path: &Path,
     tool_home_directory: &Path,
     protocol: &dyn ToolProtocol,
@@ -75,7 +91,15 @@ fn scan_devices(
         .args(scan.args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    configure_tool_process(&mut command, tool_path, tool_home_directory, None);
+    configure_tool_process(
+        host,
+        &mut command,
+        &ToolProcessContext {
+            tool_path,
+            tool_home_directory,
+            tool_log_directory: None,
+        },
+    );
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
@@ -92,7 +116,7 @@ fn scan_devices(
             Ok(Some(_)) => break,
             Ok(None) => {
                 if Instant::now() >= deadline {
-                    terminate_tool_process(&mut child);
+                    host.terminate_tool_process(&mut child);
                     let _ = child.wait();
                     return DeviceSnapshot {
                         devices: Vec::new(),

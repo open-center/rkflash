@@ -3,5 +3,5 @@
 mod json_workspace;
 mod local_file_system;
 
-pub(crate) use json_workspace::JsonConfigurationRepository;
-pub(crate) use local_file_system::LocalFileSystem;
+pub use json_workspace::JsonConfigurationRepository;
+pub use local_file_system::LocalFileSystem;

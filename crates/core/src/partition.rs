@@ -114,6 +114,28 @@ fn looks_like_parameter(text: &str) -> bool {
     })
 }
 
+/// Rockchip 传统固件布局中的标准分区（名称, 起始扇区）；下载列表默认展示这些条目，
+/// 烧录工具也按这些名称识别可以直接按分区名写入的镜像。
+pub const STANDARD_PARTITIONS: &[(&str, &str)] = &[
+    ("parameter", "0x00000000"),
+    ("uboot", "0x00004000"),
+    ("trust", "0x00006000"),
+    ("misc", "0x00008000"),
+    ("resource", "0x0000a000"),
+    ("kernel", "0x00010000"),
+    ("boot", "0x00020000"),
+    ("recovery", "0x00040000"),
+    ("system", "0x00080000"),
+];
+
+/// 是否为标准分区名（不区分大小写，忽略首尾空白）。
+pub fn is_standard_partition(name: &str) -> bool {
+    let name = name.trim();
+    STANDARD_PARTITIONS
+        .iter()
+        .any(|(standard, _)| standard.eq_ignore_ascii_case(name))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterPartition {
     pub name: String,
