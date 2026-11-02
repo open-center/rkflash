@@ -22,6 +22,6 @@
   RKDevTool，请重新安装官方 DriverAssitant。Windows 版与 macOS 版一样使用开源 rkdeveloptool，
   不支持检测安全模式、清空序列号、重置 USB 管道与串口日志导出（Linux 版由官方 upgrade_tool 提供）。
 - Linux 安装包内含 Rockchip 闭源 `upgrade_tool`（来自 vicharak-in/Linux_Upgrade_Tool，已按 SHA-256 校验），
-  不属于本项目开源许可范围，详见 `linux/packaging/THIRD_PARTY.md`。
+  不属于本项目开源许可范围，详见 `packaging/linux/files/THIRD_PARTY.md`。
 - 本工具原名 rktools（Linux）/ RKFlashMac（macOS）。Linux 新包会自动替换旧的 rktools；macOS 上旧的
   `RKFlashMac.app` 不会被覆盖，确认新版可用后把它移到废纸篓即可。

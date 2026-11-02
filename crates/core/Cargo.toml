@@ -1,0 +1,9 @@
+[package]
+name = "rkflash-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "RKFlash platform-independent core: Rockchip firmware, partition and flashing workflow logic"
+
+[dependencies]
