@@ -1,4 +1,14 @@
 use super::super::*;
+use crate::desktop::actions::UNSUPPORTED_HINT;
+
+/// 未设置 RKFLASH_LOG_DIR 时的默认日志目录（系统临时目录下）。
+fn default_log_directory() -> String {
+    std::env::temp_dir()
+        .join("rkflash")
+        .join("log")
+        .display()
+        .to_string()
+}
 
 impl RkFlashApp {
     pub(in crate::desktop) fn render_advanced(&mut self, ui: &mut egui::Ui) {
@@ -57,9 +67,15 @@ impl RkFlashApp {
                         if ui
                             .add_enabled(
                                 !self.application.is_active()
-                                    && !self.output_path.trim().is_empty(),
+                                    && !self.output_path.trim().is_empty()
+                                    && self.application.supports(
+                                        &FlashOperation::ExportSerialLog {
+                                            output: PathBuf::new(),
+                                        },
+                                    ),
                                 egui::Button::new("开始导出"),
                             )
+                            .on_disabled_hover_text(UNSUPPORTED_HINT)
                             .clicked()
                         {
                             self.run_operation(FlashOperation::ExportSerialLog {
@@ -130,7 +146,7 @@ impl RkFlashApp {
                         ui.add_sized(
                             [ui.available_width() - 238.0, 34.0],
                             egui::TextEdit::singleline(&mut self.tool_log_directory)
-                                .hint_text("日志目录，例如 /tmp/rkflash/log"),
+                                .hint_text(format!("日志目录，例如 {}", default_log_directory())),
                         );
                         if ui
                             .add_enabled(!active, egui::Button::new("选择目录"))
@@ -180,7 +196,7 @@ impl RkFlashApp {
                                 .color(theme::MUTED_DARK),
                         );
                         ui.label(
-                            RichText::new("/tmp/rkflash/log")
+                            RichText::new(default_log_directory())
                                 .monospace()
                                 .size(11.0)
                                 .color(theme::MUTED),
@@ -251,7 +267,13 @@ impl RkFlashApp {
                         ui.selectable_value(&mut self.loader_storage, 0, "自动");
                         ui.selectable_value(&mut self.loader_storage, 1, "eMMC");
                         ui.selectable_value(&mut self.loader_storage, 2, "SPI NOR");
-                        ui.selectable_value(&mut self.loader_storage, 3, "SPI NAND");
+                        let spi_nand = FlashOperation::UpgradeLoader {
+                            loader: PathBuf::new(),
+                            storage: StorageType::SpiNand,
+                        };
+                        if self.application.supports(&spi_nand) {
+                            ui.selectable_value(&mut self.loader_storage, 3, "SPI NAND");
+                        }
                     });
                 if ui
                     .add_enabled(

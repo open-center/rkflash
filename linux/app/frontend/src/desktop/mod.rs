@@ -83,6 +83,7 @@ pub struct RkFlashApp {
     reset_after_download: bool,
     no_reset_after_upgrade: bool,
     loader_storage: usize,
+    firmware_storage: usize,
     device_snapshot: DeviceSnapshot,
     logs: Vec<LogEntry>,
     progress: f32,
@@ -104,7 +105,7 @@ impl RkFlashApp {
         let tool_available = tool_path.is_some();
         let tool_message = match tool_path {
             Some(path) => format!("已找到工具：{}", path.display()),
-            None => "未找到 upgrade_tool，请从右上角选择官方工具".to_owned(),
+            None => format!("未找到 {}，请从右上角选择工具", application.tool_name()),
         };
         let tool_log_directory = application.tool_log_directory().display().to_string();
 
@@ -126,6 +127,7 @@ impl RkFlashApp {
             reset_after_download: true,
             no_reset_after_upgrade: false,
             loader_storage: 0,
+            firmware_storage: 0,
             device_snapshot: DeviceSnapshot::default(),
             logs: Vec::new(),
             progress: 0.0,

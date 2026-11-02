@@ -127,8 +127,10 @@ impl RkFlashApp {
                                 tool_path
                                     .map(|path| path.display().to_string())
                                     .unwrap_or_else(|| {
-                                        "支持 RK_UPGRADE_TOOL、tools/upgrade_tool 或手动选择"
-                                            .to_owned()
+                                        format!(
+                                            "未找到 {}，点击手动选择",
+                                            self.application.tool_name()
+                                        )
                                     }),
                             )
                             .clicked()

@@ -29,7 +29,9 @@ impl FlashPlanner for UpgradeToolAdapter {
                 images,
                 reset_after,
             } => self.download_plan(images, *reset_after),
-            FlashOperation::UpgradeFirmware { firmware, no_reset } => {
+            FlashOperation::UpgradeFirmware {
+                firmware, no_reset, ..
+            } => {
                 let mut args = vec![OsString::from("UF"), firmware.as_os_str().to_owned()];
                 if *no_reset {
                     args.push(OsString::from("-noreset"));
@@ -105,6 +107,10 @@ impl FlashPlanner for UpgradeToolAdapter {
             )),
         }
     }
+
+    fn tool_name(&self) -> &'static str {
+        "upgrade_tool"
+    }
 }
 
 impl FlashProfile for UpgradeToolAdapter {
@@ -172,10 +178,7 @@ impl UpgradeToolAdapter {
         if reset_after {
             commands.push(CommandSpec::new("重启设备", ["RD"]));
         }
-        Ok(ExecutionPlan {
-            name: "下载镜像".to_owned(),
-            commands,
-        })
+        Ok(ExecutionPlan::new("下载镜像", commands))
     }
 
     fn query_plan(&self, query: DeviceQuery) -> ExecutionPlan {

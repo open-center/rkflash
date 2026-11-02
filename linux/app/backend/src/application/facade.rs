@@ -52,6 +52,14 @@ impl FlashApplication {
 }
 
 impl FlashService for FlashApplication {
+    fn supports(&self, operation: &FlashOperation) -> bool {
+        self.planner.supports(operation)
+    }
+
+    fn tool_name(&self) -> &'static str {
+        self.planner.tool_name()
+    }
+
     fn poll(&mut self) -> ApplicationUpdate {
         let device_snapshot = self.device_monitor.latest_device_snapshot();
         if let Some(snapshot) = &device_snapshot {
