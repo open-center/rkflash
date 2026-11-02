@@ -39,7 +39,6 @@ linux: version-check
 	cd $(ROOT)/linux && ./build.sh build
 	@mkdir -p $(DIST)
 	cp $(ROOT)/linux/output/dist/rkflash_$(VERSION)_amd64.deb $(DIST)/rkflash-$(VERSION)-linux-amd64.deb
-	cp $(ROOT)/linux/output/dist/install.sh $(DIST)/rkflash-$(VERSION)-linux-install.sh
 	@ls -l $(DIST)
 
 linux-check:
