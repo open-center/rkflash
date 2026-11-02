@@ -1,0 +1,12 @@
+[package]
+name = "rktools-backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "RKTools application, domain and Rockchip infrastructure backend"
+
+[dependencies]
+libc.workspace = true
+rktools-api.workspace = true
+rktools-config.workspace = true

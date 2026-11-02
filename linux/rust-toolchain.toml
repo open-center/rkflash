@@ -1,0 +1,7 @@
+[toolchain]
+# 固定具体版本，保证任何时间重建镜像都得到同一套编译器；
+# 升级工具链时显式修改这里，而不是跟随 stable 漂移。
+channel = "1.98.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+

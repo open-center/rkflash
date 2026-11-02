@@ -1,0 +1,19 @@
+# Debian 运行时依赖。每行一个 control Depends 表达式。
+# build.sh 的 package 与 offline 子命令共用此清单。
+libc6 (>= 2.35)
+libgcc-s1
+libegl1
+libgl1
+libx11-6
+libx11-xcb1
+libxcb1
+libxcursor1
+libxi6
+libxkbcommon0
+libxkbcommon-x11-0
+libxrender1
+libwayland-client0
+libwayland-egl1
+udev
+xdg-desktop-portal
+xdg-desktop-portal-gtk

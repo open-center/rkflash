@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="shell" x1="38" y1="24" x2="220" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#173B3A"/>
+      <stop offset="1" stop-color="#0B181D"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="36" y1="28" x2="218" y2="226" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#43E0C2"/>
+      <stop offset="1" stop-color="#11806C"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="54" y1="58" x2="213" y2="198" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#B7FFF0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="58" fill="#091014"/>
+  <rect x="18" y="18" width="220" height="220" rx="48" fill="url(#shell)" stroke="url(#edge)" stroke-width="6"/>
+  <path d="M38 72V50c0-7 5-12 12-12h22M184 38h22c7 0 12 5 12 12v22M218 184v22c0 7-5 12-12 12h-22M72 218H50c-7 0-12-5-12-12v-22" fill="none" stroke="#49E4C5" stroke-width="5" stroke-linecap="round" opacity=".75"/>
+
+  <path d="M43 58h47c32 0 49 17 49 44 0 18-9 31-26 37l30 59h-32l-26-52H73v52H43V58Zm30 26v37h16c14 0 21-6 21-19 0-12-7-18-21-18H73Z" fill="url(#mark)"/>
+  <path d="M133 58h28v54l34-54h33l-47 70 49 70h-35l-34-54v54h-28V58Z" fill="#45DDBF"/>
+
+  <circle cx="46" cy="128" r="4" fill="#45DDBF"/>
+  <circle cx="210" cy="128" r="4" fill="#45DDBF"/>
+</svg>

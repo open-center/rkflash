@@ -1,0 +1,109 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # Rockchip 闭源 upgrade_tool：固定上游提交，构建脚本再按 linux/packaging/upgrade_tool.sha256 校验。
+  UPGRADE_TOOL_URL: https://raw.githubusercontent.com/vicharak-in/Linux_Upgrade_Tool/266e4c0f59d36a5f9b395a78255d6af04222279c/upgrade_tool
+
+jobs:
+  linux:
+    name: Ubuntu (.deb, amd64)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: linux
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch upgrade_tool
+        run: |
+          mkdir -p tools
+          curl -fsSL --retry 3 -o tools/upgrade_tool "$UPGRADE_TOOL_URL"
+          chmod +x tools/upgrade_tool
+          sha256sum --check packaging/upgrade_tool.sha256
+
+      - name: Check (fmt / architecture / test / clippy)
+        run: ./build.sh check
+
+      - name: Build .deb
+        run: ./build.sh build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: |
+            linux/output/dist/*.deb
+            linux/output/dist/install.sh
+          if-no-files-found: error
+
+  macos:
+    name: macOS (.dmg, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check
+        run: make ARCH=${{ matrix.arch }} check
+
+      - name: Build .dmg
+        run: make ARCH=${{ matrix.arch }} dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-${{ matrix.arch }}
+          path: macos/build/dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Rename installer and write checksums
+        working-directory: dist
+        run: |
+          mv install.sh rktools-linux-install.sh
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "rktools $GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md

@@ -1,0 +1,4 @@
+# Rockchip devices in Maskrom / Loader mode.
+# This rule must run before 73-seat-late.rules so systemd-logind can apply
+# the uaccess ACL for the active desktop user.
+SUBSYSTEM=="usb", ATTR{idVendor}=="2207", MODE="0660", TAG+="uaccess"

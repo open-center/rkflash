@@ -1,0 +1,10 @@
+[package]
+name = "rktools-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Stable frontend-backend contract for RKTools"
+
+[dependencies]
+rktools-config.workspace = true
