@@ -16,28 +16,22 @@ description: 按固定 Cargo workspace、完整后端分层、端口适配器解
 
 ## 保持依赖方向
 
-本仓库固定为五 crate workspace，不再在仓库根目录建立 `src/`：
+Rust 工作区位于仓库根目录，按“通用分层 + 平台拆包”组织（完整说明见 `docs/分层架构.md`）：
 
 ```text
-rkflash-launcher -> rkflash-frontend -> rkflash-api -> rkflash-config
-        |                                      ^
-        +--------> rkflash-backend -------------+
-                          +------------------------> rkflash-config
+launcher → platforms/{linux,windows} → runtime → application → core
+frontend → api        application → api, config
 ```
 
-- `crates/api/` 的 Cargo package 为 `rkflash-api`，是前后端唯一共享契约，只保存能力接口、类型化操作、设备状态和执行事件；禁止依赖 backend、frontend、文件系统、进程、平台与 UI。
-- `crates/config/` 的 Cargo package 为 `rkflash-config`，只包含镜像/工作区配置模型、业务校验和 JSON codec；禁止文件系统、进程、设备、平台与 UI 依赖。
-- `crates/backend/` 的 Cargo package 为 `rkflash-backend`，必须保持 `domain -> application ports <- infrastructure adapters` 的依赖反转；禁止依赖 frontend。
-- `crates/backend/src/domain/` 只保存后端内部执行计划；跨前后端的设备、操作和执行事件统一来自 `rkflash-api`。禁止文件系统、进程、GUI、厂商适配器和应用门面依赖。
-- `crates/backend/src/application/` 不直接执行命令或读写文件；`facade.rs` 的 `FlashApplication` 是前后端唯一门面，纯匹配和校验规则分别放在职责明确的用例模块。
-- `crates/backend/src/application/ports/` 必须按职责隔离端口：任务执行、设备监控、工具定位、操作日志、规划/协议、工作区仓储和最小文件系统查询不得重新合并成万能 Runtime 或 Repository 接口。
-- `crates/backend/src/infrastructure/process/` 是创建外部进程的唯一位置，并按命令环境、只读轮询、日志映射、终端清洗和任务协调拆分；通用进程模块禁止出现 Rockchip、`upgrade_tool` 和厂商命令码。
-- `crates/backend/src/infrastructure/rockchip/` 集中保存工具发现、Rockchip profile、命令映射和输出解析；厂商特例不得扩散到应用或前端。
-- `crates/backend/src/infrastructure/persistence/` 分开实现工作区仓储和本地文件系统端口；JSON 编解码复用 config crate，不维护第二份模型。
-- `crates/frontend/` 的 Cargo package 为 `rkflash-frontend`，只依赖 `rkflash-api`，管理 egui 桌面状态、输入和反馈，并提交类型化操作；固件元数据、工作区、parameter 和设备访问必须经 `FlashService`，禁止依赖 backend、启动进程或直接依赖后端内部适配器。界面专用字体发现隔离在 `desktop/platform/`。
-- `crates/launcher/` 的 Cargo package 和二进制名为 `rkflash`，只连接 `rkflash_backend::create_application` 与 `rkflash_frontend::desktop::run`，不放业务、设备、配置或 UI 实现。
+- `crates/core/`（`rkflash-core`）：领域核心——固件解析、分区表、芯片识别、工具输出识别、rkdeveloptool 协议与烧录工作流；不依赖任何其他 crate、界面或进程管理。
+- `crates/api/`、`crates/config/`：前后端唯一契约与工作区配置模型；不依赖任何实现或系统能力。
+- `crates/application/`：`FlashApplication` 门面、操作校验、镜像路径解析、执行计划（`domain/`）与端口（`ports/`）；端口按职责隔离（任务执行、设备监控、工具定位、操作日志、规划/协议、工作区仓储、文件系统），不得合并成万能接口；不访问文件系统或进程。
+- `crates/runtime/`：创建外部进程的唯一位置（执行、会话、轮询、日志、终端清洗、持久化、工具发现、装配）；平台差异只经 `OsHost` 注入，禁止 `cfg(windows/unix)`、系统专有 API 和任何烧录工具/厂商细节。
+- `crates/platforms/linux/`：upgrade_tool 适配器 + Unix 宿主；`crates/platforms/windows/`：rkdeveloptool 适配器 + Win32 宿主。平台差异只放在这里，两个平台包互不依赖。
+- `crates/frontend/`：只依赖 `rkflash-api`，提交类型化操作；平台差异（字体、渲染器、启动失败提示）隔离在 `desktop/platform/`。
+- `crates/launcher/`：只按目标平台选择平台包的 `create_application()` 并调用 `rkflash_frontend::desktop::run`。
 
-全部 Rust 源码统一放在 `crates/`；其下目录只写职责名：`api`、`backend`、`config`、`frontend`、`launcher`。Cargo package 使用 `rkflash-*` 前缀。Rust 模块和源码使用 `snake_case`，外部二进制、desktop、udev 和安装路径继续遵循平台契约。
+新增平台时新建 `crates/platforms/<名称>`，实现 `FlashPlanner`、`ToolProtocol` 与 `OsHost`，用 `runtime::assemble_application` 装配，不修改通用层。Cargo package 使用 `rkflash-*` 前缀，Rust 模块使用 `snake_case`。
 
 新增抽象必须确实隔离变化或依赖；小功能放入职责最接近的现有模块，不为目录对称增加空层、`utils.rs`、兼容转发或第二套门面。
 
@@ -46,7 +40,7 @@ rkflash-launcher -> rkflash-frontend -> rkflash-api -> rkflash-config
 ## 类型化操作与唯一命令映射
 
 - GUI、确认框、校验和后端规划共享同一个 `FlashOperation` / 领域枚举契约，不跨层复制命令字符串或状态判断。
-- `crates/backend/src/infrastructure/rockchip/upgrade_tool.rs` 是 Rockchip 命令映射的单一权威位置；通用进程运行时不感知 `DI`、`WL`、`UF`、`RID` 等命令码。
+- `crates/platforms/linux/src/upgrade_tool.rs` 是 Rockchip 命令映射的单一权威位置；通用进程运行时不感知 `DI`、`WL`、`UF`、`RID` 等命令码。
 - 外部工具必须使用独立 program/argv 调用，禁止拼接用户可控 Shell 命令。
 - 写入、擦除、升级 Loader、切换存储等改变设备或数据的操作保留明确校验与确认；无设备或多设备时拒绝执行。
 - 结果同时分析退出码和已清洗的 stdout/stderr 失败文本；先统一去除 ANSI/VT100 控制序列，再做进度和失败解析。
@@ -61,7 +55,7 @@ rkflash-launcher -> rkflash-frontend -> rkflash-api -> rkflash-config
 
 ## 保持 parameter 与固件匹配契约
 
-- `rkflash-backend` 用 `FlashApplication` 实现 `FlashService::import_parameter`，负责协调读取、解析、目录枚举和结果返回；实际文件系统访问继续经 `ConfigurationRepository`。
+- `rkflash-application / rkflash-runtime` 用 `FlashApplication` 实现 `FlashService::import_parameter`，负责协调读取、解析、目录枚举和结果返回；实际文件系统访问继续经 `ConfigurationRepository`。
 - 导入 `parameter.txt` 时保留 `parameter` 项，并在同目录不区分大小写匹配同名 `.img`、`.bin`、`.txt` 或无扩展名固件；`rootfs:grow` 等后缀不属于文件名。
 - 命中的项填入路径并启用；缺失项清空路径、保持未启用并向用户明确报告，禁止猜测跨目录文件。
 - 标准分区继续由 Rockchip profile 映射；未知分区按已解析起始扇区走通用写入，不在 UI 复制分区表。

@@ -45,11 +45,15 @@ VERSION                  # 唯一版本来源，三个平台共用
 Makefile                 # 统一入口：版本管理、各平台的检查与打包
 Cargo.toml  Cargo.lock   # Rust 工作区（Linux 与 Windows 共用）
 crates/
-├── core/                # 平台无关核心：固件解析、分区表、芯片识别、烧录工作流
-├── api/  config/        # 前后端契约与工作区配置模型
-├── backend/             # 应用层与适配器（Linux：upgrade_tool；Windows：rkdeveloptool）
-├── frontend/            # egui 界面
-└── launcher/            # rkflash 可执行程序
+├── core/                # 领域层：固件解析、分区表、芯片识别、烧录工作流
+├── api/  config/        # 契约层：前后端接口与工作区配置模型
+├── application/         # 应用层：用例门面、校验、执行计划、端口定义
+├── runtime/             # 通用基础设施：进程执行、设备轮询、日志、持久化
+├── frontend/            # 界面层（egui）
+├── platforms/
+│   ├── linux/           # Linux 专属：upgrade_tool 适配器 + Unix 进程/日志
+│   └── windows/         # Windows 专属：rkdeveloptool 适配器 + Win32 进程/日志
+└── launcher/            # 按目标平台选择平台包并启动
 macos/                   # macOS 版：Swift + SwiftUI，完整说明见 macos/README.md
 native/                  # rkdeveloptool 与 libusb 源码，macOS 与 Windows 共用
 assets/icons/            # 三个平台共用的应用图标
@@ -61,8 +65,10 @@ scripts/version.sh       # 把 VERSION 同步到 Cargo.toml、Cargo.lock 和 mac
 output/  dist/           # 本地构建与打包输出（已忽略），dist/ 文件名与 Release 一致
 ```
 
-依赖方向：`frontend → api ← backend → core`，`core` 不依赖任何其他 crate；架构边界由
-`packaging/linux/build.sh architecture`（CI 的 Linux 检查）自动校验。
+依赖方向：`launcher → platforms/* → runtime → application → core`，界面只依赖 `api`。
+平台差异只出现在 `platforms/*`（以及 `macos/`），通用层不含任何平台条件编译；
+完整说明见 [docs/分层架构.md](docs/分层架构.md)，边界由 `packaging/linux/build.sh architecture`
+（CI 的 Linux 检查）自动校验。
 
 ## 从源码构建
 

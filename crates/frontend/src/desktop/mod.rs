@@ -50,7 +50,7 @@ pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
     let slot: Rc<RefCell<Option<Box<dyn FlashService>>>> =
         Rc::new(RefCell::new(Some(Box::new(application))));
     let mut failures = Vec::new();
-    for &(renderer, label) in RENDERERS {
+    for &(renderer, label) in platform::RENDERERS {
         let pending = Rc::clone(&slot);
         let result = eframe::run_native(
             "RKFlash",
@@ -69,19 +69,9 @@ pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
         }
     }
     let message = format!("启动 RKFlash 图形界面失败。{}", failures.join("；"));
-    show_startup_error(&message);
+    platform::show_startup_error(&message);
     Err(message)
 }
-
-/// Windows 优先使用 wgpu（Direct3D 12，无显卡时由系统 WARP 软件渲染），失败再试 OpenGL；
-/// 其他平台沿用已验证的 OpenGL 渲染。
-#[cfg(windows)]
-const RENDERERS: &[(eframe::Renderer, &str)] = &[
-    (eframe::Renderer::Wgpu, "Direct3D/wgpu"),
-    (eframe::Renderer::Glow, "OpenGL"),
-];
-#[cfg(not(windows))]
-const RENDERERS: &[(eframe::Renderer, &str)] = &[(eframe::Renderer::Glow, "OpenGL")];
 
 fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
     eframe::NativeOptions {
@@ -97,20 +87,6 @@ fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
         ..Default::default()
     }
 }
-
-/// Windows 发布版没有控制台，启动失败时用对话框告知原因。
-#[cfg(windows)]
-fn show_startup_error(message: &str) {
-    rfd::MessageDialog::new()
-        .set_level(rfd::MessageLevel::Error)
-        .set_title("RKFlash")
-        .set_description(message)
-        .set_buttons(rfd::MessageButtons::Ok)
-        .show();
-}
-
-#[cfg(not(windows))]
-fn show_startup_error(_message: &str) {}
 
 pub struct RkFlashApp {
     application: Box<dyn FlashService>,

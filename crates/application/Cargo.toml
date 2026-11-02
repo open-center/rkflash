@@ -1,0 +1,12 @@
+[package]
+name = "rkflash-application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "RKFlash application layer: use cases, validation, execution plans and ports"
+
+[dependencies]
+rkflash-api.workspace = true
+rkflash-config.workspace = true
+rkflash-core.workspace = true

@@ -79,19 +79,31 @@ project_validate_sources() {
         if rg -n 'apt-get|dpkg-deb|cargo build|upgrade_tool' packaging/linux/build.sh; then
             packaging_die "出包入口包含了业务实现，应只保留装配和参数分发"
         fi
+        # ---- 分层依赖：launcher → platforms → runtime → application → core；frontend 只依赖 api ----
         packaging_assert_no_matches \
-            "契约、配置或后端 crate 依赖了 GUI 框架" \
-            'eframe|egui|rfd' \
-            crates/api/src crates/config/src crates/backend/src
+            "core（领域层）依赖了其他 crate、界面或进程管理" \
+            'rkflash[_-](api|config|application|runtime|platform|frontend)|eframe|egui|rfd|libc|windows_sys|std::process|Command::new' \
+            crates/core
         packaging_assert_no_matches \
-            "进程执行逻辑越过基础设施边界" \
-            'std::process|Command::new' \
-            crates/api/src crates/config/src crates/backend/src/domain \
-            crates/backend/src/application crates/frontend/src
+            "api/config（契约层）依赖了实现、界面或系统能力" \
+            'rkflash[_-](application|runtime|platform|frontend|core)|eframe|egui|rfd|libc|windows_sys|std::process|std::fs' \
+            crates/api crates/config
         packaging_assert_no_matches \
-            "契约、配置、应用层或领域层直接访问了文件系统" \
-            'std::fs|fs::(read|write|metadata|read_dir|File|OpenOptions)' \
-            crates/api/src crates/config/src crates/backend/src/domain crates/backend/src/application
+            "application（应用层）依赖了基础设施、平台、界面或直接访问系统" \
+            'rkflash[_-](runtime|platform|frontend)|eframe|egui|rfd|libc|windows_sys|std::process|Command::new|std::fs|fs::(read|write|metadata|read_dir|File|OpenOptions)' \
+            crates/application
+        packaging_assert_no_matches \
+            "runtime（通用基础设施）包含了平台条件编译、系统专有 API 或依赖了平台/界面" \
+            'cfg\((windows|unix|not\()|cfg!\(|target_os|libc|windows_sys|std::os::(unix|windows)|rkflash[_-](platform|frontend)|eframe|egui|rfd' \
+            crates/runtime
+        packaging_assert_no_matches \
+            "runtime（通用基础设施）包含了烧录工具或厂商细节" \
+            'rockchip|upgrade_tool|rkdeveloptool|\b(LD|DB|DI|WL|UF|EF|RID|RFI|RCI|RCB|PL|RSN|RSM|TD|RD|SSD|SN|RP|UL|RL|EL|RCL)\b' \
+            crates/runtime/src
+        packaging_assert_no_matches \
+            "frontend（界面层）绕过 api 依赖了实现或启动进程" \
+            'rkflash[_-](application|runtime|platform|core|config)|ProcessRuntime|UpgradeToolAdapter|RkDevelopToolAdapter|std::process|Command::new' \
+            crates/frontend
         packaging_assert_no_matches \
             "前端业务动作绕过 API 能力端口访问了文件系统" \
             'std::fs|fs::(read|write|metadata|read_dir)|\.is_file\(' \
@@ -99,45 +111,20 @@ project_validate_sources() {
             crates/frontend/src/desktop/pages \
             crates/frontend/src/desktop/view_model.rs
         packaging_assert_no_matches \
-            "应用层或领域层反向依赖了基础设施" \
-            'crate::infrastructure|ProcessRuntime|UpgradeToolAdapter|JsonConfigurationRepository|LocalFileSystem' \
-            crates/backend/src/domain crates/backend/src/application
-        packaging_assert_no_matches \
-            "通用进程层包含了 Rockchip 厂商细节" \
-            'rockchip|upgrade_tool|\b(LD|DB|DI|WL|UF|EF|RID|RFI|RCI|RCB|PL|RSN|RSM|TD|RD|SSD|SN|RP|UL|RL|EL|RCL)\b' \
-            crates/backend/src/infrastructure/process
-        packaging_assert_no_matches \
-            "前端直接依赖了后端基础设施适配器" \
-            'ProcessRuntime|UpgradeToolAdapter|JsonConfigurationRepository|LocalFileSystem' \
-            crates/frontend/src
-        packaging_assert_no_matches \
-            "Rockchip upgrade_tool 命令码泄漏到通用层或前端" \
+            "Rockchip 工具命令码泄漏到契约、应用层或前端" \
             '\b(LD|DB|DI|WL|UF|EF|RID|RFI|RCI|RCB|PL|RSN|RSM|TD|RD|SSD|SN|RP|UL|RL|EL|RCL)\b' \
-            crates/api/src crates/config/src crates/backend/src/domain \
-            crates/backend/src/application crates/frontend/src
+            crates/api/src crates/config/src crates/application/src crates/frontend/src
         packaging_assert_no_matches \
-            "rkflash-core 依赖了界面、契约、配置、后端或进程管理" \
-            'rkflash[_-](api|config|backend|frontend)|eframe|egui|rfd|libc|std::process|Command::new' \
-            crates/core
+            "Linux 平台 crate 依赖了 Windows 平台、界面或 Win32 API" \
+            'rkflash[_-]platform[_-]windows|windows_sys|rkdeveloptool|rkflash[_-]frontend|eframe|egui' \
+            crates/platforms/linux
         packaging_assert_no_matches \
-            "API 契约反向依赖了前端或后端实现" \
-            'rkflash[_-](backend|frontend)|eframe|egui|rfd|libc' \
-            crates/api
+            "Windows 平台 crate 依赖了 Linux 平台、界面或 Unix API" \
+            'rkflash[_-]platform[_-]linux|libc|std::os::unix|upgrade_tool|rkflash[_-]frontend|eframe|egui' \
+            crates/platforms/windows
         packaging_assert_no_matches \
-            "config crate 反向依赖了 API、后端或前端" \
-            'rkflash[_-](api|backend|frontend)|eframe|egui|rfd|libc' \
-            crates/config
-        packaging_assert_no_matches \
-            "backend crate 反向依赖了前端" \
-            'rkflash[_-]frontend' \
-            crates/backend
-        packaging_assert_no_matches \
-            "frontend crate 直接依赖了 backend 实现" \
-            'rkflash[_-]backend' \
-            crates/frontend
-        packaging_assert_no_matches \
-            "app crate 包含了业务、设备或界面实现" \
-            'mod (application|domain|infrastructure|desktop)|upgrade_tool|FlashOperation' \
+            "launcher 包含了业务、设备或界面实现" \
+            'mod (application|domain|infrastructure|desktop)|upgrade_tool|rkdeveloptool|FlashOperation|Command::new' \
             crates/launcher/src
     )
     echo "架构边界检查通过"

@@ -1,10 +1,14 @@
 [workspace]
+# 依赖方向：launcher → platforms/* → runtime → application → core；frontend 只依赖 api。
 members = [
-    "crates/api",
     "crates/core",
-    "crates/backend",
+    "crates/api",
     "crates/config",
+    "crates/application",
+    "crates/runtime",
     "crates/frontend",
+    "crates/platforms/linux",
+    "crates/platforms/windows",
     "crates/launcher",
 ]
 default-members = ["crates/launcher"]
@@ -24,10 +28,13 @@ rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rkflash-api = { path = "crates/api" }
-rkflash-backend = { path = "crates/backend" }
+rkflash-application = { path = "crates/application" }
 rkflash-config = { path = "crates/config" }
 rkflash-core = { path = "crates/core" }
 rkflash-frontend = { path = "crates/frontend" }
+rkflash-platform-linux = { path = "crates/platforms/linux" }
+rkflash-platform-windows = { path = "crates/platforms/windows" }
+rkflash-runtime = { path = "crates/runtime" }
 
 [profile.release]
 lto = "thin"

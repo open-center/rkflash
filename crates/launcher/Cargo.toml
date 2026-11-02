@@ -8,5 +8,11 @@ description = "Rockchip USB flashing desktop utility"
 default-run = "rkflash"
 
 [dependencies]
-rkflash-backend.workspace = true
 rkflash-frontend.workspace = true
+
+# 每个目标平台只链接自己的平台 crate。
+[target.'cfg(windows)'.dependencies]
+rkflash-platform-windows.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+rkflash-platform-linux.workspace = true
