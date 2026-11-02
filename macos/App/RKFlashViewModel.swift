@@ -225,11 +225,11 @@ final class RKFlashViewModel: ObservableObject {
                let deviceCode = RKChipIdentity.code(fromChipInfoOutput: chipOutput) {
                 let deviceName = RKChipIdentity.displayName(for: deviceCode)
                 switch RKChipIdentity.compatibility(firmwareCode: firmwareCode, deviceCode: deviceCode) {
-                case false:
+                case .some(false):
                     throw RKFlashError.firmwareChipMismatch(firmware: info.chipName, device: deviceName)
-                case true:
+                case .some(true):
                     self.appendLog("芯片核对通过：固件 \(info.chipName)，设备 \(deviceName)")
-                case nil:
+                case .none:
                     self.appendLog("警告：固件 \(info.chipName)，设备 \(deviceName)，编码格式不同，无法自动严格比对。")
                 }
             } else {

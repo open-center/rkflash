@@ -43,8 +43,13 @@ make app && make check
 
 ## 发布流程
 
-`.github/workflows/build.yml` 在每次推送和 PR 时分别构建并检查两个平台；推送 `v*` 标签时额外创建
-GitHub Release，附带 `.deb`、两个架构的 `.dmg` 和 `SHA256SUMS`：
+`.github/workflows/build.yml` 在每次推送和 PR 时分别构建并检查两个平台，产物包括 `.deb`、两个架构的
+`.dmg` 和 `SHA256SUMS`：
+
+- 推送到 `main`：自动刷新预发布 [`nightly`](https://github.com/open-center/rktools/releases/tag/nightly)，
+  始终对应 main 最新提交。
+- PR：只构建和检查，不发布。
+- 推送 `v*` 标签：创建正式 Release。
 
 ```bash
 git tag v2026.11.0
