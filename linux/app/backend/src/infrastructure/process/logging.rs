@@ -15,7 +15,7 @@ pub(super) fn runtime_tool_home_directory() -> PathBuf {
         .unwrap_or_default()
         .as_nanos();
     std::env::temp_dir()
-        .join("rktools/.runtime")
+        .join("rkflash/.runtime")
         .join(format!("{}-{nonce}", std::process::id()))
 }
 
@@ -72,7 +72,7 @@ pub(super) fn initial_tool_log_directory(
         return path;
     }
 
-    let fallback = std::env::temp_dir().join("rktools/log");
+    let fallback = std::env::temp_dir().join("rkflash/log");
     if fallback == preferred {
         return fallback;
     }
@@ -80,7 +80,7 @@ pub(super) fn initial_tool_log_directory(
 }
 
 pub(super) fn default_tool_log_directory() -> PathBuf {
-    resolve_tool_log_directory(std::env::var_os("RKTOOLS_LOG_DIR"), std::env::temp_dir())
+    resolve_tool_log_directory(std::env::var_os("RKFLASH_LOG_DIR"), std::env::temp_dir())
 }
 
 pub(super) fn resolve_tool_log_directory(
@@ -90,7 +90,7 @@ pub(super) fn resolve_tool_log_directory(
     configured
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| temp_directory.join("rktools/log"))
+        .unwrap_or_else(|| temp_directory.join("rkflash/log"))
 }
 
 pub(super) fn next_operation_log_path(directory: &Path) -> Result<PathBuf, String> {

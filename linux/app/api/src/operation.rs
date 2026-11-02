@@ -1,6 +1,6 @@
 //! 与具体烧录工具无关的类型化操作契约。
 
-use rktools_config::ImageEntry;
+use rkflash_config::ImageEntry;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

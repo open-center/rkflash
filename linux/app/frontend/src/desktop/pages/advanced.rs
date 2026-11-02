@@ -130,7 +130,7 @@ impl RkFlashApp {
                         ui.add_sized(
                             [ui.available_width() - 238.0, 34.0],
                             egui::TextEdit::singleline(&mut self.tool_log_directory)
-                                .hint_text("日志目录，例如 /tmp/rktools/log"),
+                                .hint_text("日志目录，例如 /tmp/rkflash/log"),
                         );
                         if ui
                             .add_enabled(!active, egui::Button::new("选择目录"))
@@ -180,14 +180,14 @@ impl RkFlashApp {
                                 .color(theme::MUTED_DARK),
                         );
                         ui.label(
-                            RichText::new("/tmp/rktools/log")
+                            RichText::new("/tmp/rkflash/log")
                                 .monospace()
                                 .size(11.0)
                                 .color(theme::MUTED),
                         );
                         ui.separator();
                         ui.label(
-                            RichText::new("可通过界面或 RKTOOLS_LOG_DIR 覆盖")
+                            RichText::new("可通过界面或 RKFLASH_LOG_DIR 覆盖")
                                 .small()
                                 .color(theme::MUTED_DARK),
                         );

@@ -6,7 +6,7 @@ use crate::domain::{
     normalize_sector, CommandSpec, DeviceControl, DeviceQuery, DeviceSnapshot, ExecutionPlan,
     FlashOperation,
 };
-use rktools_config::ImageEntry;
+use rkflash_config::ImageEntry;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -208,7 +208,7 @@ mod tests {
     use super::UpgradeToolAdapter;
     use crate::application::FlashPlanner;
     use crate::domain::{DeviceQuery, FlashOperation, StorageType};
-    use rktools_config::ImageEntry;
+    use rkflash_config::ImageEntry;
     use std::path::PathBuf;
 
     #[test]

@@ -87,7 +87,7 @@ struct RKModelsTests {
 
     private static func testFirmwareInspectionAndExtraction() {
         let temporaryDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("RKFlashMacTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("RKFlashTests-\(UUID().uuidString)", isDirectory: true)
         try! FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
@@ -140,7 +140,7 @@ struct RKModelsTests {
         data.putLE32(0xfffffff0, at: 0x8c + 0x60)
         data.putLE32(0x100, at: 0x8c + 0x6c)
 
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("RKFlashMac-invalid-\(UUID().uuidString).img")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("RKFlash-invalid-\(UUID().uuidString).img")
         try! data.write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 

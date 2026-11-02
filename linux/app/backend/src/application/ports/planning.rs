@@ -1,5 +1,5 @@
 use crate::domain::{CommandSpec, DeviceSnapshot, ExecutionPlan, FlashOperation};
-use rktools_config::ImageEntry;
+use rkflash_config::ImageEntry;
 
 /// 只在 UI 线程使用，不要求跨线程共享；`ToolProtocol` 才是后台线程依赖的端口。
 pub(crate) trait FlashPlanner {

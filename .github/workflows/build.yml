@@ -124,7 +124,7 @@ jobs:
           sed "s/{VERSION}/$VERSION/g" .github/release-notes.md > notes.md
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             gh release create "$GITHUB_REF_NAME" dist/* \
-              --title "rktools $VERSION" \
+              --title "RKFlash $VERSION" \
               --notes-file notes.md
           else
             # 删除旧的 nightly 及其标签后在当前提交重建，保证产物始终对应 main 最新提交
@@ -137,6 +137,6 @@ jobs:
             gh release create nightly dist/* \
               --target "$GITHUB_SHA" \
               --prerelease \
-              --title "rktools $VERSION 最新构建（main@${GITHUB_SHA::7}）" \
+              --title "RKFlash $VERSION 最新构建（main@${GITHUB_SHA::7}）" \
               --notes-file nightly-notes.md
           fi

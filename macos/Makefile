@@ -4,7 +4,7 @@ SHELL := /bin/zsh
 
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILD_DIR := $(ROOT)/build
-APP_NAME := RKFlashMac
+APP_NAME := RKFlash
 XCODE_PRODUCT_DIR := $(strip $(TARGET_BUILD_DIR))
 APP_OUTPUT_DIR := $(if $(XCODE_PRODUCT_DIR),$(XCODE_PRODUCT_DIR),$(BUILD_DIR))
 APP_BUNDLE := $(APP_OUTPUT_DIR)/$(APP_NAME).app
@@ -15,8 +15,8 @@ APP_TOOL := $(APP_MACOS)/rkdeveloptool
 APP_ICON := $(ROOT)/Resources/AppIcon.icns
 INFO_PLIST := $(ROOT)/Resources/Info.plist
 PRIVACY_MANIFEST := $(ROOT)/Resources/PrivacyInfo.xcprivacy
-APP_ENTITLEMENTS := $(ROOT)/Resources/RKFlashMac.entitlements
-DEBUG_ENTITLEMENTS := $(ROOT)/Resources/RKFlashMac.debug.entitlements
+APP_ENTITLEMENTS := $(ROOT)/Resources/RKFlash.entitlements
+DEBUG_ENTITLEMENTS := $(ROOT)/Resources/RKFlash.debug.entitlements
 TOOL_ENTITLEMENTS := $(ROOT)/Resources/rkdeveloptool.entitlements
 THIRD_PARTY_NOTICE := $(ROOT)/THIRD_PARTY.md
 GPL_LICENSE := $(ROOT)/LICENSE
@@ -130,7 +130,7 @@ $(APP_BUNDLE): $(SWIFT_BINARY) $(RK_TOOL) $(INFO_PLIST) $(APP_ICON) $(PRIVACY_MA
 	chmod 755 $(APP_MACOS)/$(APP_NAME) $(APP_TOOL)
 	@if [[ "$(SANDBOX)" == "1" ]]; then \
 		codesign --force --sign - --timestamp=none --options runtime \
-			--identifier cn.roboticscenter.RKFlashMac.rkdeveloptool \
+			--identifier cn.roboticscenter.RKFlash.rkdeveloptool \
 			--entitlements $(TOOL_ENTITLEMENTS) $(APP_TOOL); \
 		codesign --force --sign - --timestamp=none --options runtime \
 			--entitlements $(APP_ENTITLEMENTS) $(APP_BUNDLE); \
@@ -195,7 +195,7 @@ universal-app:
 		$(UNIVERSAL_DIR)/x86_64/$(APP_NAME).app/Contents/MacOS/rkdeveloptool \
 		-output $(UNIVERSAL_APP)/Contents/MacOS/rkdeveloptool
 	codesign --force --sign - --timestamp=none --options runtime \
-		--identifier cn.roboticscenter.RKFlashMac.rkdeveloptool \
+		--identifier cn.roboticscenter.RKFlash.rkdeveloptool \
 		--entitlements $(TOOL_ENTITLEMENTS) $(UNIVERSAL_APP)/Contents/MacOS/rkdeveloptool
 	codesign --force --sign - --timestamp=none --options runtime \
 		--entitlements $(APP_ENTITLEMENTS) $(UNIVERSAL_APP)

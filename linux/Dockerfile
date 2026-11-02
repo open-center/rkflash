@@ -41,11 +41,11 @@ RUN set -e; \
         mkdir -p /usr/local/share/ca-certificates; \
         if [[ -n "$CUSTOM_CA_CERT_B64" ]]; then \
             printf '%s' "$CUSTOM_CA_CERT_B64" | base64 --decode \
-                >/usr/local/share/ca-certificates/rktools-build-ca.crt; \
+                >/usr/local/share/ca-certificates/rkflash-build-ca.crt; \
         fi; \
         if [[ -n "$EXTRA_CA_CERT_B64" ]]; then \
             printf '%s' "$EXTRA_CA_CERT_B64" | base64 --decode \
-                >/usr/local/share/ca-certificates/rktools-extra-ca.crt; \
+                >/usr/local/share/ca-certificates/rkflash-extra-ca.crt; \
         fi; \
         update-ca-certificates; \
     fi; \
@@ -95,22 +95,22 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     SYSTEM_BOOTSTRAP_DISABLED=1 \
     BASELINE_DPKG_STATUS=/var/lib/dpkg/status.clean-base
 
-COPY rust-toolchain.toml /tmp/rktools-rust-toolchain.toml
+COPY rust-toolchain.toml /tmp/rkflash-rust-toolchain.toml
 
-RUN rust_channel=$(sed -n 's/^channel = "\([^"]*\)"/\1/p' /tmp/rktools-rust-toolchain.toml) \
+RUN rust_channel=$(sed -n 's/^channel = "\([^"]*\)"/\1/p' /tmp/rkflash-rust-toolchain.toml) \
     && [[ -n "$rust_channel" ]] \
     && curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
         https://sh.rustup.rs --output /tmp/rustup-init.sh \
     && sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain "$rust_channel" \
         --component clippy --component rustfmt --no-modify-path \
-    && rm -f /tmp/rustup-init.sh /tmp/rktools-rust-toolchain.toml \
+    && rm -f /tmp/rustup-init.sh /tmp/rkflash-rust-toolchain.toml \
     && rustc --version \
     && cargo --version \
     && cargo clippy --version \
     && rustfmt --version
 
-COPY scripts/docker-entrypoint.sh /usr/local/bin/rktools-container-entrypoint
-RUN chmod 0755 /usr/local/bin/rktools-container-entrypoint
+COPY scripts/docker-entrypoint.sh /usr/local/bin/rkflash-container-entrypoint
+RUN chmod 0755 /usr/local/bin/rkflash-container-entrypoint
 
 WORKDIR /workspace
-ENTRYPOINT ["/usr/local/bin/rktools-container-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/rkflash-container-entrypoint"]

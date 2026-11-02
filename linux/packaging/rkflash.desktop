@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=RKFlash
+GenericName=Rockchip Firmware Flasher
+GenericName[zh_CN]=RK 固件烧录
+Comment=Rockchip USB firmware flashing utility
+Comment[zh_CN]=Rockchip USB 固件烧录工具
+Exec=/usr/bin/rkflash
+Icon=rkflash
+Terminal=false
+Categories=Development;
+Keywords=Rockchip;Flash;Firmware;Maskrom;Loader;rktools;烧录;固件;
+StartupNotify=true
+StartupWMClass=rkflash

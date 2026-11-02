@@ -1,4 +1,4 @@
-# RKFlashMac
+# RKFlash
 
 面向 Intel 和 Apple Silicon macOS 的 Rockchip USB 原生烧录工具。工程提供 SwiftUI 图形界面，
 并把 `rkdeveloptool 1.32-macos.4` 和 `libusb 1.0.30` 静态打包进应用，不要求用户安装
@@ -40,8 +40,8 @@ xcode-select --install
 首次获取工程：
 
 ```bash
-git clone https://github.com/open-center/rktools.git
-cd rktools/macos
+git clone https://github.com/open-center/rkflash.git
+cd rkflash/macos
 ```
 
 已有工程时直接进入工程目录，然后构建应用：
@@ -55,7 +55,7 @@ make check
 产物位于：
 
 ```text
-build/RKFlashMac.app
+build/RKFlash.app
 ```
 
 开发阶段可直接启动构建产物：
@@ -69,8 +69,8 @@ make run
 ```bash
 make clean
 make ARCH=x86_64 app
-file build/RKFlashMac.app/Contents/MacOS/RKFlashMac
-codesign --verify --deep --strict build/RKFlashMac.app
+file build/RKFlash.app/Contents/MacOS/RKFlash
+codesign --verify --deep --strict build/RKFlash.app
 ```
 
 交叉构建只能验证编译、文件架构和签名。`make check` 以及 USB/烧录测试应在 Intel Mac
@@ -78,7 +78,7 @@ codesign --verify --deep --strict build/RKFlashMac.app
 
 ## 安装到“应用程序”
 
-构建并安装到 `/Applications/RKFlashMac.app`：
+构建并安装到 `/Applications/RKFlash.app`：
 
 ```bash
 make install
@@ -86,12 +86,12 @@ make install
 
 安装完成后不再需要通过命令启动，可从下面任一位置直接打开：
 
-1. 启动台中点击“RK 原生烧录工具”。
-2. Spotlight 搜索“RK 原生烧录工具”或“RKFlashMac”。
-3. Finder → 应用程序 → RKFlashMac。
+1. 启动台中点击“RKFlash”。
+2. Spotlight 搜索“RKFlash”。
+3. Finder → 应用程序 → RKFlash。
 
-更新本机版本时，先退出正在运行的 RKFlashMac，再重新执行 `make install`。卸载时在
-Finder 的“应用程序”中把 RKFlashMac 移到废纸篓即可；应用不会安装内核驱动或后台服务。
+更新本机版本时，先退出正在运行的 RKFlash，再重新执行 `make install`。卸载时在
+Finder 的“应用程序”中把 RKFlash 移到废纸篓即可；应用不会安装内核驱动或后台服务。
 
 ## 制作 DMG 安装镜像
 
@@ -104,8 +104,8 @@ make dmg
 输出文件名包含应用版本和处理器架构，例如：
 
 ```text
-build/dist/RKFlashMac-<版本>-arm64.dmg
-build/dist/RKFlashMac-<版本>-x86_64.dmg
+build/dist/RKFlash-<版本>-arm64.dmg
+build/dist/RKFlash-<版本>-x86_64.dmg
 ```
 
 当前构建使用本机临时签名，适合本机开发和验证。若要把 DMG 发给其他用户并获得和正式
@@ -160,7 +160,7 @@ make dmg
 应用内核心路径：
 
 ```bash
-CORE="/Applications/RKFlashMac.app/Contents/MacOS/rkdeveloptool"
+CORE="/Applications/RKFlash.app/Contents/MacOS/rkdeveloptool"
 "$CORE" ld
 "$CORE" db /path/to/MiniLoaderAll.bin
 "$CORE" wl 0 /path/to/image.wic

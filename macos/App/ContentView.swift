@@ -76,7 +76,7 @@ struct ContentView: View {
                 .font(.system(size: 26))
                 .foregroundStyle(statusColor)
             VStack(alignment: .leading, spacing: 3) {
-                Text("RK 原生烧录工具")
+                Text("RKFlash · RK 固件烧录")
                     .font(.title2.bold())
                 Text(model.operationStatusText)
                     .font(.callout)

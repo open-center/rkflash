@@ -1,6 +1,6 @@
-# rktools
+# RKFlash（Linux）
 
-rktools 是一个面向 Rockchip 开发板的纯 Rust 桌面烧录前端。界面使用
+rkflash 是一个面向 Rockchip 开发板的纯 Rust 桌面烧录前端。界面使用
 `egui/eframe`，后台以参数数组直接调用 Rockchip `upgrade_tool`，不经过 shell，支持设备轮询、
 实时日志、任务进度和中止操作。
 
@@ -11,7 +11,7 @@ rktools 是一个面向 Rockchip 开发板的纯 Rust 桌面烧录前端。界�
 ## 文档导航
 
 - [代码总览与文档索引](docs/代码总览.md)：仓库结构、crate 依赖方向、设计原则速查。
-- [契约层详解](docs/契约层.md)：`rktools-api` / `rktools-config` 的类型与 `FlashService` 端口。
+- [契约层详解](docs/契约层.md)：`rkflash-api` / `rkflash-config` 的类型与 `FlashService` 端口。
 - [后端详解](docs/后端.md)：domain / application / infrastructure 逐模块与命令码全表。
 - [前端详解](docs/前端.md)：帧循环、轮询协议、页面与组件、主题与中文字体。
 - [构建脚本体系详解](docs/构建脚本.md)：build.sh、Dockerfile 与 lib/config 分层、离线包流程。
@@ -44,7 +44,7 @@ rktools 是一个面向 Rockchip 开发板的纯 Rust 桌面烧录前端。界�
   - 多设备时拒绝执行，避免误刷
   - 子进程参数不经过 shell
   - 可中止运行中的 `upgrade_tool`
-  - `upgrade_tool` 内部日志默认隔离到 `/tmp/rktools/log/`，可在“高级功能”中直接修改日志目录
+  - `upgrade_tool` 内部日志默认隔离到 `/tmp/rkflash/log/`，可在“高级功能”中直接修改日志目录
   - 每次操作开始前创建一份以本地时间戳命名的独立日志（如 `20260916-183045-127.log`）；烧录失败时弹出错误气泡，完整错误仍保留在运行终端和对应日志中
 
 完整的功能对照和边界见 [功能矩阵](docs/功能矩阵.md)。
@@ -63,7 +63,7 @@ rktools 是一个面向 Rockchip 开发板的纯 Rust 桌面烧录前端。界�
 1. 环境变量 `RK_UPGRADE_TOOL`；
 2. 程序同目录的 `tools/upgrade_tool`；
 3. 当前工作目录的 `tools/upgrade_tool`；
-4. 系统安装路径 `/usr/lib/rktools/upgrade_tool`；
+4. 系统安装路径 `/usr/lib/rkflash/upgrade_tool`；
 5. `PATH`；
 6. 界面右上角手动选择。
 
@@ -80,7 +80,7 @@ chmod +x tools/upgrade_tool
 开发运行时可以安装仓库中的 udev 规则：
 
 ```bash
-sudo cp packaging/71-rktools.rules /etc/udev/rules.d/
+sudo cp packaging/71-rkflash.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo udevadm trigger --action=add --subsystem-match=usb --attr-match=idVendor=2207
 ```
@@ -111,11 +111,11 @@ release 二进制，使用：
 开发调试时可以直接指定工具日志目录：
 
 ```bash
-RKTOOLS_LOG_DIR=output/logs ./build.sh run
+RKFLASH_LOG_DIR=output/logs ./build.sh run
 ```
 
 Cargo 的编译缓存、中间文件和程序统一位于 `output/target/`，release 程序为
-`output/target/release/rktools`。Cargo 下载缓存位于 `output/docker/cargo-home/`。容器以当前
+`output/target/release/rkflash`。Cargo 下载缓存位于 `output/docker/cargo-home/`。容器以当前
 用户的 uid/gid 运行，因此产物不会变成只能由 root 修改的文件。
 
 统一入口还提供完整的开发生命周期命令：
@@ -132,18 +132,18 @@ Cargo 的编译缓存、中间文件和程序统一位于 `output/target/`，rel
 ```
 
 首次调用会创建 builder 镜像，后续命令直接复用；`setup` 会检查并更新镜像，`toolchain` 会
-不使用缓存完整重建。修改 Dockerfile 后也可以设置 `RKTOOLS_DOCKER_REBUILD=1` 强制重建。
+不使用缓存完整重建。修改 Dockerfile 后也可以设置 `RKFLASH_DOCKER_REBUILD=1` 强制重建。
 `clean` 只清理仓库内的 `output/`，不启动 Docker，也不需要网络。默认目标平台是项目支持的
 `linux/amd64`；需要覆盖时可设置
-`RKTOOLS_DOCKER_PLATFORM`。如果所在网络需要使用 Ubuntu 镜像站，可传入完整基础镜像名，
-例如 `RKTOOLS_UBUNTU_IMAGE=registry.example.com/library/ubuntu:22.04 ./build.sh build`；
-`RKTOOLS_UBUNTU_VERSION` 只选择开发环境或离线包的目标版本，不会改变正式 `.deb` 的
+`RKFLASH_DOCKER_PLATFORM`。如果所在网络需要使用 Ubuntu 镜像站，可传入完整基础镜像名，
+例如 `RKFLASH_UBUNTU_IMAGE=registry.example.com/library/ubuntu:22.04 ./build.sh build`；
+`RKFLASH_UBUNTU_VERSION` 只选择开发环境或离线包的目标版本，不会改变正式 `.deb` 的
 22.04 编译基线。APT 镜像可通过
-`RKTOOLS_UBUNTU_APT_MIRROR=https://mirror.example.com/ubuntu` 单独设置，该值也会自动用于
+`RKFLASH_UBUNTU_APT_MIRROR=https://mirror.example.com/ubuntu` 单独设置，该值也会自动用于
 离线依赖包下载。企业 HTTPS 代理使用自定义根证书时，可再设置
-`RKTOOLS_DOCKER_CA_CERT=/path/to/company-ca.crt`（单张 PEM 证书），证书会安装到构建镜像中。
+`RKFLASH_DOCKER_CA_CERT=/path/to/company-ca.crt`（单张 PEM 证书），证书会安装到构建镜像中。
 如果 APT 镜像和外部 Rust 下载分别需要两条不同的信任链，第二张证书可通过
-`RKTOOLS_DOCKER_EXTRA_CA_CERT` 传入。
+`RKFLASH_DOCKER_EXTRA_CA_CERT` 传入。
 
 ## 构建 Debian 安装包
 
@@ -156,7 +156,7 @@ Cargo 的编译缓存、中间文件和程序统一位于 `output/target/`，rel
 `./build.sh package` 是同一出包流程的等价别名。
 
 脚本强制在 Ubuntu 22.04 Docker 镜像中编译、校验并出包，即使设置了其他
-`RKTOOLS_UBUNTU_VERSION` 也不会改变这一基线。构建依赖和固定版本的 Rust
+`RKFLASH_UBUNTU_VERSION` 也不会改变这一基线。构建依赖和固定版本的 Rust
 工具链都已位于镜像内，不会修改宿主机，也不需要 `sudo`。
 正式出包使用独立的 `output/target/delivery-ubuntu-22.04/`，不会复用 24.04/26.04
 开发容器生成的链接产物。
@@ -165,7 +165,7 @@ Cargo 的编译缓存、中间文件和程序统一位于 `output/target/`，rel
 `output/dist/`。
 
 生成的 `.deb` 与安全安装器分别位于
-`output/dist/rktools_<版本>_amd64.deb` 和 `output/dist/install.sh`。普通 `.deb` 遵循 Debian
+`output/dist/rkflash_<版本>_amd64.deb` 和 `output/dist/install.sh`。普通 `.deb` 遵循 Debian
 依赖模型；如果目标系统缺少运行库，直接用 `apt install` 会访问已配置的软件仓库。
 
 在当前 Ubuntu 主机安装已经生成的 `.deb`：
@@ -197,9 +197,9 @@ Cargo 的编译缓存、中间文件和程序统一位于 `output/target/`，rel
 也可以只生成一个目标版本：
 
 ```bash
-RKTOOLS_UBUNTU_VERSION=22.04 ./build.sh offline
-RKTOOLS_UBUNTU_VERSION=24.04 ./build.sh offline
-RKTOOLS_UBUNTU_VERSION=26.04 ./build.sh offline
+RKFLASH_UBUNTU_VERSION=22.04 ./build.sh offline
+RKFLASH_UBUNTU_VERSION=24.04 ./build.sh offline
+RKFLASH_UBUNTU_VERSION=26.04 ./build.sh offline
 ```
 
 脚本先在 Ubuntu 22.04 基线容器中构建唯一的应用 `.deb`，再由每个目标版本的 APT 解析
@@ -207,7 +207,7 @@ RKTOOLS_UBUNTU_VERSION=26.04 ./build.sh offline
 说明一并打入：
 
 ```text
-output/dist/rktools_<版本>_<发行版>-<版本>_<架构>_offline.tar.gz
+output/dist/rkflash_<版本>_<发行版>-<版本>_<架构>_offline.tar.gz
 ```
 
 每个离线包生成后，脚本还会在对应版本的干净 Ubuntu 基础容器中以 `--network none` 禁用
@@ -217,18 +217,18 @@ output/dist/rktools_<版本>_<发行版>-<版本>_<架构>_offline.tar.gz
 受限网络可为每个版本分别指定基础镜像和 APT 镜像；变量名中的版本点号改为下划线：
 
 ```bash
-RKTOOLS_UBUNTU_IMAGE_22_04=registry.example.com/ubuntu:22.04 \
-RKTOOLS_UBUNTU_IMAGE_24_04=registry.example.com/ubuntu:24.04 \
-RKTOOLS_UBUNTU_IMAGE_26_04=registry.example.com/ubuntu:26.04 \
-RKTOOLS_UBUNTU_APT_MIRROR=https://mirror.example.com/ubuntu \
+RKFLASH_UBUNTU_IMAGE_22_04=registry.example.com/ubuntu:22.04 \
+RKFLASH_UBUNTU_IMAGE_24_04=registry.example.com/ubuntu:24.04 \
+RKFLASH_UBUNTU_IMAGE_26_04=registry.example.com/ubuntu:26.04 \
+RKFLASH_UBUNTU_APT_MIRROR=https://mirror.example.com/ubuntu \
 ./build.sh offline-all
 ```
 
 把这个压缩包复制到离线目标机，解压后执行：
 
 ```bash
-tar -xzf rktools_*_offline.tar.gz
-cd rktools_*_offline
+tar -xzf rkflash_*_offline.tar.gz
+cd rkflash_*_offline
 sha256sum --check SHA256SUMS
 ./install.sh
 ```
@@ -239,23 +239,23 @@ sha256sum --check SHA256SUMS
 卸载同样不访问仓库：
 
 ```bash
-sudo apt purge rktools
+sudo apt purge rkflash
 ```
 
-卸载只清除 rktools、桌面入口和 udev 规则；共享系统运行库会保留，避免影响其他应用。
+卸载只清除 rkflash、桌面入口和 udev 规则；共享系统运行库会保留，避免影响其他应用。
 
 目标机已具备运行依赖、且明确不需要 APT 处理依赖时，也可以使用 `dpkg` 直接处理指定文件：
 
 ```bash
-sudo dpkg --install ./output/dist/rktools_<版本>_amd64.deb
+sudo dpkg --install ./output/dist/rkflash_<版本>_amd64.deb
 ```
 
-`dpkg --install` 不访问软件仓库、不下载依赖，也不会为了安装 rktools 而修复或升级其他
+`dpkg --install` 不访问软件仓库、不下载依赖，也不会为了安装 rkflash 而修复或升级其他
 软件包。如果它报告缺少依赖，应改用与目标 Ubuntu 版本匹配的完整离线包。本机正常安装
 优先使用 `./build.sh install`，不要直接从权限为 `0750` 的家目录调用 APT。
 
 应用包和离线包都包含桌面菜单入口、udev 权限规则和 `upgrade_tool`，安装完成后可从应用菜单搜索
-`rktools`，或在终端运行 `rktools`。
+`rkflash`，或在终端运行 `rkflash`。
 
 ## 工程结构
 
@@ -281,7 +281,7 @@ app/                         # 所有 Rust 源码统一归档在此目录
 │       ├── layout.rs        # 内容驱动的响应式布局策略
 │       ├── overlays.rs      # 错误、设备提示和高风险确认浮层
 │       └── theme.rs         # 视觉系统与中文字体加载
-└── launcher/                # rktools 二进制；只负责装配后端与桌面前端
+└── launcher/                # rkflash 二进制；只负责装配后端与桌面前端
 ```
 
 完整依赖规则和扩展方式见 [分层架构说明](docs/分层架构.md)。运行

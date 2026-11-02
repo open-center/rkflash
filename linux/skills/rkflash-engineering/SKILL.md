@@ -1,11 +1,11 @@
 ---
-name: rktools-engineering
-description: 按固定 Cargo workspace、完整后端分层、端口适配器解耦、类型化烧录操作、安全设备状态语义和单一出包入口重构、扩展、评审或修复 rktools Rust/egui 工程，并清理已确认重复、冗余、无效或不可达的代码。适用于本仓库的配置模型、应用用例、Rockchip upgrade_tool 适配、进程运行时、桌面 UI、构建与 Debian 离线交付改动。
+name: rkflash-engineering
+description: 按固定 Cargo workspace、完整后端分层、端口适配器解耦、类型化烧录操作、安全设备状态语义和单一出包入口重构、扩展、评审或修复 rkflash Rust/egui 工程，并清理已确认重复、冗余、无效或不可达的代码。适用于本仓库的配置模型、应用用例、Rockchip upgrade_tool 适配、进程运行时、桌面 UI、构建与 Debian 离线交付改动。
 ---
 
-# RKTools 工程模式
+# RKFlash 工程模式
 
-在不削弱分层、设备安全和交付边界的前提下修改 rktools。复用现有 Rust/egui 技术栈和外部 `upgrade_tool` 适配，不把闭源二进制包装描述为开源协议实现。
+在不削弱分层、设备安全和交付边界的前提下修改 rkflash。复用现有 Rust/egui 技术栈和外部 `upgrade_tool` 适配，不把闭源二进制包装描述为开源协议实现。
 
 ## 从实际生效代码开始
 
@@ -19,25 +19,25 @@ description: 按固定 Cargo workspace、完整后端分层、端口适配器解
 本仓库固定为五 crate workspace，不再在仓库根目录建立 `src/`：
 
 ```text
-rktools-launcher -> rktools-frontend -> rktools-api -> rktools-config
+rkflash-launcher -> rkflash-frontend -> rkflash-api -> rkflash-config
         |                                      ^
-        +--------> rktools-backend -------------+
-                          +------------------------> rktools-config
+        +--------> rkflash-backend -------------+
+                          +------------------------> rkflash-config
 ```
 
-- `app/api/` 的 Cargo package 为 `rktools-api`，是前后端唯一共享契约，只保存能力接口、类型化操作、设备状态和执行事件；禁止依赖 backend、frontend、文件系统、进程、平台与 UI。
-- `app/config/` 的 Cargo package 为 `rktools-config`，只包含镜像/工作区配置模型、业务校验和 JSON codec；禁止文件系统、进程、设备、平台与 UI 依赖。
-- `app/backend/` 的 Cargo package 为 `rktools-backend`，必须保持 `domain -> application ports <- infrastructure adapters` 的依赖反转；禁止依赖 frontend。
-- `app/backend/src/domain/` 只保存后端内部执行计划；跨前后端的设备、操作和执行事件统一来自 `rktools-api`。禁止文件系统、进程、GUI、厂商适配器和应用门面依赖。
+- `app/api/` 的 Cargo package 为 `rkflash-api`，是前后端唯一共享契约，只保存能力接口、类型化操作、设备状态和执行事件；禁止依赖 backend、frontend、文件系统、进程、平台与 UI。
+- `app/config/` 的 Cargo package 为 `rkflash-config`，只包含镜像/工作区配置模型、业务校验和 JSON codec；禁止文件系统、进程、设备、平台与 UI 依赖。
+- `app/backend/` 的 Cargo package 为 `rkflash-backend`，必须保持 `domain -> application ports <- infrastructure adapters` 的依赖反转；禁止依赖 frontend。
+- `app/backend/src/domain/` 只保存后端内部执行计划；跨前后端的设备、操作和执行事件统一来自 `rkflash-api`。禁止文件系统、进程、GUI、厂商适配器和应用门面依赖。
 - `app/backend/src/application/` 不直接执行命令或读写文件；`facade.rs` 的 `FlashApplication` 是前后端唯一门面，纯匹配和校验规则分别放在职责明确的用例模块。
 - `app/backend/src/application/ports/` 必须按职责隔离端口：任务执行、设备监控、工具定位、操作日志、规划/协议、工作区仓储和最小文件系统查询不得重新合并成万能 Runtime 或 Repository 接口。
 - `app/backend/src/infrastructure/process/` 是创建外部进程的唯一位置，并按命令环境、只读轮询、日志映射、终端清洗和任务协调拆分；通用进程模块禁止出现 Rockchip、`upgrade_tool` 和厂商命令码。
 - `app/backend/src/infrastructure/rockchip/` 集中保存工具发现、Rockchip profile、命令映射和输出解析；厂商特例不得扩散到应用或前端。
 - `app/backend/src/infrastructure/persistence/` 分开实现工作区仓储和本地文件系统端口；JSON 编解码复用 config crate，不维护第二份模型。
-- `app/frontend/` 的 Cargo package 为 `rktools-frontend`，只依赖 `rktools-api`，管理 egui 桌面状态、输入和反馈，并提交类型化操作；固件元数据、工作区、parameter 和设备访问必须经 `FlashService`，禁止依赖 backend、启动进程或直接依赖后端内部适配器。界面专用字体发现隔离在 `desktop/platform/`。
-- `app/launcher/` 的 Cargo package 和二进制名为 `rktools`，只连接 `rktools_backend::create_application` 与 `rktools_frontend::desktop::run`，不放业务、设备、配置或 UI 实现。
+- `app/frontend/` 的 Cargo package 为 `rkflash-frontend`，只依赖 `rkflash-api`，管理 egui 桌面状态、输入和反馈，并提交类型化操作；固件元数据、工作区、parameter 和设备访问必须经 `FlashService`，禁止依赖 backend、启动进程或直接依赖后端内部适配器。界面专用字体发现隔离在 `desktop/platform/`。
+- `app/launcher/` 的 Cargo package 和二进制名为 `rkflash`，只连接 `rkflash_backend::create_application` 与 `rkflash_frontend::desktop::run`，不放业务、设备、配置或 UI 实现。
 
-全部 Rust 源码统一放在 `app/`；其下目录只写职责名：`api`、`backend`、`config`、`frontend`、`launcher`。Cargo package 使用 `rktools-*` 前缀。Rust 模块和源码使用 `snake_case`，外部二进制、desktop、udev 和安装路径继续遵循平台契约。
+全部 Rust 源码统一放在 `app/`；其下目录只写职责名：`api`、`backend`、`config`、`frontend`、`launcher`。Cargo package 使用 `rkflash-*` 前缀。Rust 模块和源码使用 `snake_case`，外部二进制、desktop、udev 和安装路径继续遵循平台契约。
 
 新增抽象必须确实隔离变化或依赖；小功能放入职责最接近的现有模块，不为目录对称增加空层、`utils.rs`、兼容转发或第二套门面。
 
@@ -61,7 +61,7 @@ rktools-launcher -> rktools-frontend -> rktools-api -> rktools-config
 
 ## 保持 parameter 与固件匹配契约
 
-- `rktools-backend` 用 `FlashApplication` 实现 `FlashService::import_parameter`，负责协调读取、解析、目录枚举和结果返回；实际文件系统访问继续经 `ConfigurationRepository`。
+- `rkflash-backend` 用 `FlashApplication` 实现 `FlashService::import_parameter`，负责协调读取、解析、目录枚举和结果返回；实际文件系统访问继续经 `ConfigurationRepository`。
 - 导入 `parameter.txt` 时保留 `parameter` 项，并在同目录不区分大小写匹配同名 `.img`、`.bin`、`.txt` 或无扩展名固件；`rootfs:grow` 等后缀不属于文件名。
 - 命中的项填入路径并启用；缺失项清空路径、保持未启用并向用户明确报告，禁止猜测跨目录文件。
 - 标准分区继续由 Rockchip profile 映射；未知分区按已解析起始扇区走通用写入，不在 UI 复制分区表。
@@ -78,8 +78,8 @@ rktools-launcher -> rktools-frontend -> rktools-api -> rktools-config
 
 - 用户入口只有根目录 `./build.sh`；入口只负责参数分发和装配，开发生命周期与交付生命周期由子命令区分。
 - `scripts/lib/rust.bash` 保存 setup、toolchain、release、run、fmt、test、lint、architecture、check 和 clean 的 Rust 工作区流程；公开 `build` 默认进入 `.deb` 交付流程，`package` 是其别名。`scripts/docker.bash` 仅作为宿主组合根，交付用例放在 `scripts/lib/delivery.bash`，Docker 机制放在 `scripts/lib/container.bash`。Rust、rustfmt、Clippy、系统开发库和打包工具都必须预装在镜像中；除用户显式执行 `install` 外，禁止构建流程调用宿主机的 sudo、apt、cargo 或 rustup。
-- `scripts/lib/` 只保留通用命令、Rust/ELF 检查与 Debian/离线依赖流程；不得出现 rktools、Rockchip、`upgrade_tool`、图标或 udev 特例。
-- `scripts/config/rktools.bash` 保存项目名、文件布局、工具校验、架构门禁和打包钩子；`scripts/config/rktools-delivery.bash` 保存发行版矩阵、镜像覆盖规则、环境变量映射和安装验收清单。项目差异通过 `project_*` 钩子注入，不在通用层增加项目名、固定版本或安装路径分支。
+- `scripts/lib/` 只保留通用命令、Rust/ELF 检查与 Debian/离线依赖流程；不得出现 rkflash、Rockchip、`upgrade_tool`、图标或 udev 特例。
+- `scripts/config/rkflash.bash` 保存项目名、文件布局、工具校验、架构门禁和打包钩子；`scripts/config/rkflash-delivery.bash` 保存发行版矩阵、镜像覆盖规则、环境变量映射和安装验收清单。项目差异通过 `project_*` 钩子注入，不在通用层增加项目名、固定版本或安装路径分支。
 - 保持 `packaging/runtime-dependencies.txt` 为运行依赖单一来源，并校验被打包 `upgrade_tool` 的固定摘要、amd64 架构和二进制兼容性。
 - 正式 `.deb` 只能在 Ubuntu 22.04 基线容器中编译并复用于 22.04/24.04/26.04；离线依赖必须按目标发行版分别解析，禁止在较新 Ubuntu 中重新编译应用后宣称向下兼容。
 - `offline`/`offline-all` 必须在对应版本的干净基础容器中使用 `--network none` 和 `apt-get --no-download` 实装验收，不能只验证下载数量或校验和。

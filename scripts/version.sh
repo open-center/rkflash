@@ -13,7 +13,7 @@ CARGO_TOML="$ROOT/linux/Cargo.toml"
 CARGO_LOCK="$ROOT/linux/Cargo.lock"
 INFO_PLIST="$ROOT/macos/Resources/Info.plist"
 # Cargo.lock 中属于本工作区的 crate（无 source 字段），版本随工作区一起变化
-WORKSPACE_CRATES='rktools|rktools-api|rktools-backend|rktools-config|rktools-frontend'
+WORKSPACE_CRATES='rkflash|rkflash-api|rkflash-backend|rkflash-config|rkflash-frontend'
 
 die() { echo "错误：$*" >&2; exit 1; }
 

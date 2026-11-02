@@ -1,5 +1,5 @@
 use crate::domain::StorageType;
-use rktools_config::ImageEntry;
+use rkflash_config::ImageEntry;
 
 struct PartitionPreset {
     enabled: bool,

@@ -1,4 +1,4 @@
-//! RKTools 可序列化配置模型与 JSON 编解码。
+//! RKFlash 可序列化配置模型与 JSON 编解码。
 
 mod codec;
 mod model;
