@@ -1,0 +1,11 @@
+[package]
+name = "rktools-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "RKTools workspace configuration model and JSON codec"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

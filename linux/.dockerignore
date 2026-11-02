@@ -1,0 +1,8 @@
+.git
+.gitignore
+output
+target
+tools/upgrade_tool
+*.log
+*.rkflash.json
+
