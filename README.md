@@ -8,7 +8,7 @@ Rockchip 系列单板的 USB 固件烧录工具，提供 Ubuntu、macOS 与 Wind
 | | Linux | Windows | macOS |
 |---|---|---|---|
 | 支持系统 | Ubuntu 22.04 / 24.04 / 26.04，amd64 | Windows 10/11，x64 | macOS 13+，Apple Silicon 与 Intel |
-| 界面 | Rust + egui（[`linux/`](linux/)） | 与 Linux 共用同一份 Rust 代码 | Swift + SwiftUI（[`macos/`](macos/)） |
+| 界面 | Rust + egui（[`crates/`](crates/)） | 与 Linux 共用同一份 Rust 代码 | Swift + SwiftUI（[`macos/`](macos/)） |
 | 烧录核心 | Rockchip `upgrade_tool`（闭源） | `rkdeveloptool` + `libusb`（开源，[`native/`](native/)） | 与 Windows 共用 [`native/`](native/) |
 | USB 驱动 | udev 规则 | WinUSB（libwdi 一键安装） | 无需驱动 |
 | 安装包 | `.deb`（命令 `rkflash`） | 安装程序 `.exe` / 免安装 `.zip` | `.dmg`（`RKFlash.app`） |
@@ -41,15 +41,28 @@ Linux 与 Windows 共用 Rust 界面和后端分层，只是烧录工具适配�
 ## 仓库结构
 
 ```text
-VERSION              # 唯一版本来源，两个平台共用
-Makefile             # 统一入口：版本管理、两个平台的检查与打包
-scripts/version.sh   # 把 VERSION 同步到 linux/Cargo.toml、Cargo.lock 和 macos/Info.plist
-linux/               # Rust + egui 界面与后端（Linux 用 upgrade_tool，Windows 用 rkdeveloptool）
-windows/             # Windows 打包：rkdeveloptool.exe、WinUSB 驱动工具、NSIS 安装程序
-macos/               # macOS 版：Swift + SwiftUI，完整说明见 macos/README.md
-native/              # rkdeveloptool 与 libusb 源码，macOS 与 Windows 共用
-dist/                # 本地打包输出（已忽略），文件名与 Release 一致
+VERSION                  # 唯一版本来源，三个平台共用
+Makefile                 # 统一入口：版本管理、各平台的检查与打包
+Cargo.toml  Cargo.lock   # Rust 工作区（Linux 与 Windows 共用）
+crates/
+├── core/                # 平台无关核心：固件解析、分区表、芯片识别、烧录工作流
+├── api/  config/        # 前后端契约与工作区配置模型
+├── backend/             # 应用层与适配器（Linux：upgrade_tool；Windows：rkdeveloptool）
+├── frontend/            # egui 界面
+└── launcher/            # rkflash 可执行程序
+macos/                   # macOS 版：Swift + SwiftUI，完整说明见 macos/README.md
+native/                  # rkdeveloptool 与 libusb 源码，macOS 与 Windows 共用
+assets/icons/            # 三个平台共用的应用图标
+packaging/
+├── linux/               # Docker 构建 .deb：build.sh、Dockerfile、deb 资源，说明见其 README
+└── windows/             # MinGW 交叉编译、WinUSB 驱动工具、NSIS 安装程序
+docs/                    # 技术文档：分层架构、后端、前端、构建与交付
+scripts/version.sh       # 把 VERSION 同步到 Cargo.toml、Cargo.lock 和 macos/Info.plist
+output/  dist/           # 本地构建与打包输出（已忽略），dist/ 文件名与 Release 一致
 ```
+
+依赖方向：`frontend → api ← backend → core`，`core` 不依赖任何其他 crate；架构边界由
+`packaging/linux/build.sh architecture`（CI 的 Linux 检查）自动校验。
 
 ## 从源码构建
 
@@ -62,7 +75,7 @@ make help
 | 命令 | 作用 | 环境 |
 |---|---|---|
 | `make check` | 版本一致性 + 当前系统对应平台的检查 | — |
-| `make linux-check` / `make linux` | Linux 检查 / 生成 `.deb` | Docker；`upgrade_tool` 放入 `linux/tools/`，见 [linux/README.md](linux/README.md) |
+| `make linux-check` / `make linux` | Linux 检查 / 生成 `.deb` | Docker；`upgrade_tool` 放入 `packaging/linux/tools/`，见 [packaging/linux/README.md](packaging/linux/README.md) |
 | `make macos-check` / `make macos` | macOS 检查 / 生成 `.dmg`（`MAC_ARCH=arm64\|x86_64`） | Xcode Command Line Tools |
 | `make windows` | 生成 Windows 安装程序与免安装 zip；Linux/macOS 上加 `WIN_CROSS=x86_64-w64-mingw32-` 交叉编译 | MinGW-w64、Rust、NSIS、7-Zip |
 | `make clean` | 清理两个平台的构建产物和 `dist/` | — |
@@ -77,7 +90,7 @@ make help
 make set-version V=0.4.1
 ```
 
-它会同步 `linux/Cargo.toml`、`linux/Cargo.lock` 和 `macos/Resources/Info.plist`；CI 用
+它会同步 `Cargo.toml`、`Cargo.lock` 和 `macos/Resources/Info.plist`；CI 用
 `scripts/version.sh check` 拒绝不一致的提交。
 
 `.github/workflows/build.yml` 在每次推送和 PR 时构建并检查两个平台：
@@ -94,8 +107,8 @@ git push origin "v$(cat VERSION)"
 
 ## 许可证
 
-本仓库按目录分别授权：`linux/` 为 [MIT](linux/LICENSE)，`macos/` 与 `native/rkdeveloptool` 为
+本仓库按目录分别授权：`crates/` 为 [MIT](crates/LICENSE)，`macos/` 与 `native/rkdeveloptool` 为
 [GPL-2.0-or-later](macos/LICENSE)，libusb 为 LGPL-2.1。Windows 安装包另含 libwdi（LGPL-3.0）与微软 WDK
 WinUSB 再分发组件，许可证随包附在 `licenses\` 目录。
 Linux 安装包内的 `upgrade_tool` 是 Rockchip 的闭源二进制，不属于上述任何许可范围，见
-[linux/packaging/THIRD_PARTY.md](linux/packaging/THIRD_PARTY.md)。
+[packaging/linux/files/THIRD_PARTY.md](packaging/linux/files/THIRD_PARTY.md)。

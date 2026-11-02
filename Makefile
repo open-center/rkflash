@@ -1,5 +1,5 @@
 # rkflash 统一入口：版本管理与两个平台的构建、检查、打包。
-# 各平台的完整能力仍分别由 linux/build.sh 与 macos/Makefile 提供，这里只做汇总。
+# 各平台的完整能力分别由 packaging/linux/build.sh、packaging/windows/Makefile 与 macos/Makefile 提供，这里只做汇总。
 # 统一命名的安装包输出到 dist/，与 GitHub Release 中的文件名一致。
 
 .DEFAULT_GOAL := help
@@ -16,9 +16,9 @@ MAC_ARCH ?= $(if $(filter arm64 x86_64,$(HOST_ARCH)),$(HOST_ARCH),arm64)
 help:
 	@echo "rkflash $(VERSION)"
 	@echo
-	@echo "  make version-check        检查 linux/ 与 macos/ 版本是否与 VERSION 一致"
+	@echo "  make version-check        检查 Rust 工作区与 macOS 版本是否与 VERSION 一致"
 	@echo "  make set-version V=X.Y.Z  修改统一版本号并同步到两个平台"
-	@echo "  make linux                构建 .deb（需要 Docker 和 linux/tools/upgrade_tool）"
+	@echo "  make linux                构建 .deb（需要 Docker 和 packaging/linux/tools/upgrade_tool）"
 	@echo "  make linux-check          Linux 格式、架构、测试、Clippy"
 	@echo "  make macos                构建当前架构的 .dmg（MAC_ARCH=arm64|x86_64）"
 	@echo "  make macos-check          macOS 构建与单元测试"
@@ -38,13 +38,13 @@ set-version:
 	@$(ROOT)/scripts/version.sh set $(V)
 
 linux: version-check
-	cd $(ROOT)/linux && ./build.sh build
+	$(ROOT)/packaging/linux/build.sh build
 	@mkdir -p $(DIST)
-	cp $(ROOT)/linux/output/dist/rkflash_$(VERSION)_amd64.deb $(DIST)/rkflash-$(VERSION)-linux-amd64.deb
+	cp $(ROOT)/output/dist/rkflash_$(VERSION)_amd64.deb $(DIST)/rkflash-$(VERSION)-linux-amd64.deb
 	@ls -l $(DIST)
 
 linux-check:
-	cd $(ROOT)/linux && ./build.sh check
+	$(ROOT)/packaging/linux/build.sh check
 
 macos: version-check
 	$(MAKE) -C $(ROOT)/macos ARCH=$(MAC_ARCH) dmg
@@ -58,9 +58,9 @@ macos-check:
 WIN_CROSS ?=
 
 windows: version-check
-	$(MAKE) -C $(ROOT)/windows package CROSS=$(WIN_CROSS)
+	$(MAKE) -C $(ROOT)/packaging/windows package CROSS=$(WIN_CROSS)
 	@mkdir -p $(DIST)
-	cp $(ROOT)/windows/build/dist/rkflash-$(VERSION)-windows-x64-setup.exe $(ROOT)/windows/build/dist/rkflash-$(VERSION)-windows-x64.zip $(DIST)/
+	cp $(ROOT)/packaging/windows/build/dist/rkflash-$(VERSION)-windows-x64-setup.exe $(ROOT)/packaging/windows/build/dist/rkflash-$(VERSION)-windows-x64.zip $(DIST)/
 	@ls -l $(DIST)
 
 check: version-check
@@ -73,5 +73,5 @@ endif
 clean:
 	rm -rf $(DIST)
 	$(MAKE) -C $(ROOT)/macos clean 2>/dev/null || true
-	$(MAKE) -C $(ROOT)/windows clean
-	cd $(ROOT)/linux && ./build.sh clean
+	$(MAKE) -C $(ROOT)/packaging/windows clean
+	$(ROOT)/packaging/linux/build.sh clean
