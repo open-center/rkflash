@@ -104,8 +104,8 @@ make dmg
 输出文件名包含应用版本和处理器架构，例如：
 
 ```text
-build/dist/RKFlashMac-0.3.13-arm64.dmg
-build/dist/RKFlashMac-0.3.13-x86_64.dmg
+build/dist/RKFlashMac-<版本>-arm64.dmg
+build/dist/RKFlashMac-<版本>-x86_64.dmg
 ```
 
 当前构建使用本机临时签名，适合本机开发和验证。若要把 DMG 发给其他用户并获得和正式

@@ -14,51 +14,74 @@ Rockchip 系列单板 USB 烧录工具，提供 Ubuntu 与 macOS 两个原生版
 
 ## 下载
 
-从 [Releases](https://github.com/open-center/rktools/releases) 下载对应平台的安装包。
+从 [Releases](https://github.com/open-center/rktools/releases) 下载对应平台的安装包。所有产物统一命名为
+`rktools-<版本>-<平台>-<架构>.<扩展名>`，两个平台共用同一个版本号：
 
-- **Ubuntu**：下载 `rktools_<版本>_amd64.deb` 和 `rktools-linux-install.sh` 到同一目录，执行
-  `./rktools-linux-install.sh`。安装后从应用菜单搜索 `rktools`。
-- **macOS**：按处理器下载 `RKFlashMac-<版本>-arm64.dmg` 或 `-x86_64.dmg`，拖入“应用程序”。
-  应用尚未经 Apple 公证，首次打开会提示“Apple 无法验证”：点“完成”，再到“系统设置 → 隐私与安全性”
-  底部点“仍要打开”；或执行 `xattr -dr com.apple.quarantine /Applications/RKFlashMac.app`。
+| 文件 | 说明 |
+|---|---|
+| `rktools-<版本>-linux-amd64.deb` | Ubuntu 22.04 / 24.04 / 26.04 安装包 |
+| `rktools-<版本>-linux-install.sh` | Linux 安装器，见下文 |
+| `rktools-<版本>-macos-arm64.dmg` | Apple Silicon Mac |
+| `rktools-<版本>-macos-x86_64.dmg` | Intel Mac |
+| `SHA256SUMS` | 全部文件的校验值 |
+
+- **Ubuntu**：把 `.deb` 和 `linux-install.sh` 下载到同一目录，执行 `bash rktools-<版本>-linux-install.sh`。
+  安装器会把同目录唯一的 `.deb` 暂存到 `/var/tmp` 再交给 `apt` 安装，自动补齐系统依赖，避免 APT 的
+  `_apt` 用户读不到 0750 权限家目录中的安装包。安装后从应用菜单搜索 `rktools`。
+- **macOS**：按处理器下载对应 `.dmg`，拖入“应用程序”。应用尚未经 Apple 公证，首次打开会提示
+  “Apple 无法验证”：点“完成”，再到“系统设置 → 隐私与安全性”底部点“仍要打开”；或执行
+  `xattr -dr com.apple.quarantine /Applications/RKFlashMac.app`。
+
+## 仓库结构
+
+```text
+VERSION              # 唯一版本来源，两个平台共用
+Makefile             # 统一入口：版本管理、两个平台的检查与打包
+scripts/version.sh   # 把 VERSION 同步到 linux/Cargo.toml、Cargo.lock 和 macos/Info.plist
+linux/               # Ubuntu 版：Rust + egui，完整说明见 linux/README.md
+macos/               # macOS 版：Swift + SwiftUI，完整说明见 macos/README.md
+dist/                # 本地打包输出（已忽略），文件名与 Release 一致
+```
 
 ## 从源码构建
 
 ```bash
 git clone https://github.com/open-center/rktools.git
+cd rktools
+make help
 ```
 
-Linux（宿主机只需要 Docker；`upgrade_tool` 需自行放入 `linux/tools/`，见 [linux/README.md](linux/README.md)）：
+| 命令 | 作用 | 环境 |
+|---|---|---|
+| `make check` | 版本一致性 + 当前系统对应平台的检查 | — |
+| `make linux-check` / `make linux` | Linux 检查 / 生成 `.deb` 与安装器 | Docker；`upgrade_tool` 放入 `linux/tools/`，见 [linux/README.md](linux/README.md) |
+| `make macos-check` / `make macos` | macOS 检查 / 生成 `.dmg`（`MAC_ARCH=arm64\|x86_64`） | Xcode Command Line Tools |
+| `make clean` | 清理两个平台的构建产物和 `dist/` | — |
+
+各平台目录内原有的 `./build.sh`、`make app` 等命令仍可单独使用。
+
+## 版本与发布
+
+版本号只在根目录 `VERSION` 中维护。修改版本：
 
 ```bash
-cd rktools/linux
-./build.sh
+make set-version V=0.4.1
 ```
 
-macOS（只需要 Xcode Command Line Tools）：
+它会同步 `linux/Cargo.toml`、`linux/Cargo.lock` 和 `macos/Resources/Info.plist`；CI 用
+`scripts/version.sh check` 拒绝不一致的提交。
 
-```bash
-cd rktools/macos
-make app && make check
-```
-
-## 发布流程
-
-`.github/workflows/build.yml` 在每次推送和 PR 时分别构建并检查两个平台，产物包括 `.deb`、两个架构的
-`.dmg` 和 `SHA256SUMS`：
+`.github/workflows/build.yml` 在每次推送和 PR 时构建并检查两个平台：
 
 - 推送到 `main`：自动刷新预发布 [`nightly`](https://github.com/open-center/rktools/releases/tag/nightly)，
   始终对应 main 最新提交。
 - PR：只构建和检查，不发布。
-- 推送 `v*` 标签：创建正式 Release。
+- 推送 `v<VERSION>` 标签：创建正式 Release，标签必须与 `VERSION` 一致：
 
 ```bash
-git tag v2026.11.0
-git push origin v2026.11.0
+git tag "v$(cat VERSION)"
+git push origin "v$(cat VERSION)"
 ```
-
-发布标签是仓库级版本，两个应用各自的版本号仍分别记录在 `linux/Cargo.toml` 与
-`macos/Resources/Info.plist`，并体现在安装包文件名中。
 
 ## 许可证
 
