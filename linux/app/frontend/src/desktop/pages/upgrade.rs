@@ -1,6 +1,17 @@
 use super::super::*;
 
+/// 整包升级前用 `cs` 选择的目标存储；upgrade_tool 自动识别，不显示该选项。
+const FIRMWARE_STORAGES: [(&str, StorageType); 3] = [
+    ("eMMC", StorageType::Emmc),
+    ("SPI NOR", StorageType::SpiNor),
+    ("自动（Loader 默认存储）", StorageType::Auto),
+];
+
 impl RkFlashApp {
+    fn firmware_storage_selectable(&self) -> bool {
+        self.application.tool_name() == "rkdeveloptool"
+    }
+
     pub(in crate::desktop) fn render_upgrade(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
@@ -19,7 +30,10 @@ impl RkFlashApp {
             section_title(
                 ui,
                 "选择统一固件",
-                "固件将在任务开始时由 upgrade_tool 完成格式校验",
+                &format!(
+                    "固件将在任务开始时由 {} 完成格式校验",
+                    self.application.tool_name()
+                ),
             );
             ui.horizontal(|ui| {
                 ui.add_sized(
@@ -57,6 +71,19 @@ impl RkFlashApp {
                 });
             });
             ui.add_space(12.0);
+            if self.firmware_storage_selectable() {
+                ui.horizontal(|ui| {
+                    ui.label("目标存储");
+                    egui::ComboBox::from_id_salt("firmware_storage")
+                        .selected_text(FIRMWARE_STORAGES[self.firmware_storage].0)
+                        .show_ui(ui, |ui| {
+                            for (index, (label, _)) in FIRMWARE_STORAGES.iter().enumerate() {
+                                ui.selectable_value(&mut self.firmware_storage, index, *label);
+                            }
+                        });
+                });
+                ui.add_space(6.0);
+            }
             ui.checkbox(
                 &mut self.no_reset_after_upgrade,
                 "升级完成后保持当前状态，不自动重启",
@@ -77,6 +104,7 @@ impl RkFlashApp {
                         FlashOperation::UpgradeFirmware {
                             firmware: Path::new(&self.firmware_path).to_path_buf(),
                             no_reset: self.no_reset_after_upgrade,
+                            storage: FIRMWARE_STORAGES[self.firmware_storage].1,
                         },
                     );
                 }
@@ -99,9 +127,7 @@ impl RkFlashApp {
                 }
 
                 ui.add_enabled(false, egui::Button::new("解包固件"))
-                    .on_disabled_hover_text(
-                        "官方 upgrade_tool 未公开固件解包命令，需后续接入 Rust 固件解析器",
-                    );
+                    .on_disabled_hover_text("升级时会自动解包并按固件清单写入各分区");
             });
         });
         ui.add_space(2.0);

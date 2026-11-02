@@ -13,7 +13,7 @@
 		A0000000000000000000000E /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources; sourceTree = SOURCE_ROOT; };
 		A0000000000000000000000F /* Tests */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Tests; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000010 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = text; path = Makefile; sourceTree = SOURCE_ROOT; };
-		A00000000000000000000011 /* Vendor */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Vendor; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000011 /* native */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ../native; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000012 /* AppStore */ = {isa = PBXFileReference; lastKnownFileType = folder; path = AppStore; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000013 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000014 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
@@ -28,7 +28,7 @@
 				A0000000000000000000000D /* Core */,
 				A0000000000000000000000E /* Resources */,
 				A0000000000000000000000F /* Tests */,
-				A00000000000000000000011 /* Vendor */,
+				A00000000000000000000011 /* native */,
 				A00000000000000000000012 /* AppStore */,
 				A00000000000000000000010 /* Makefile */,
 				A00000000000000000000013 /* README.md */,

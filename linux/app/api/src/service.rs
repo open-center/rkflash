@@ -7,6 +7,10 @@ pub trait FlashService {
     fn poll(&mut self) -> ApplicationUpdate;
     fn execute(&self, operation: FlashOperation) -> Result<(), String>;
     fn validate(&self, operation: &FlashOperation) -> Result<(), String>;
+    /// 当前平台的烧录工具是否支持该操作；不支持时前端禁用对应入口。
+    fn supports(&self, operation: &FlashOperation) -> bool;
+    /// 当前平台使用的外部烧录工具名称（upgrade_tool 或 rkdeveloptool）。
+    fn tool_name(&self) -> &'static str;
     fn cancel(&self);
     fn is_active(&self) -> bool;
     fn tool_path(&self) -> Option<PathBuf>;
