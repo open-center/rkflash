@@ -19,7 +19,8 @@ Rockchip 系列单板 USB 烧录工具，提供 Ubuntu 与 macOS 两个原生版
 - **Ubuntu**：下载 `rktools_<版本>_amd64.deb` 和 `rktools-linux-install.sh` 到同一目录，执行
   `./rktools-linux-install.sh`。安装后从应用菜单搜索 `rktools`。
 - **macOS**：按处理器下载 `RKFlashMac-<版本>-arm64.dmg` 或 `-x86_64.dmg`，拖入“应用程序”。
-  应用尚未经 Apple 公证，首次打开需在 Finder 中右键 →“打开”。
+  应用尚未经 Apple 公证，首次打开会提示“Apple 无法验证”：点“完成”，再到“系统设置 → 隐私与安全性”
+  底部点“仍要打开”；或执行 `xattr -dr com.apple.quarantine /Applications/RKFlashMac.app`。
 
 ## 从源码构建
 
