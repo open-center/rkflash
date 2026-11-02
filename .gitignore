@@ -1,2 +1,5 @@
 .DS_Store
 /dist/
+/output/
+*.rkflash.json
+/packaging/linux/tools/upgrade_tool

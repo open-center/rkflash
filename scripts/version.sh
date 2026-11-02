@@ -2,15 +2,15 @@
 # 仓库唯一版本来源是根目录 VERSION。本脚本把它同步到两个平台的工程文件，或检查是否一致。
 #
 #   scripts/version.sh              打印当前版本
-#   scripts/version.sh check        检查 linux/ 与 macos/ 是否与 VERSION 一致（CI 使用）
+#   scripts/version.sh check        检查 Rust 工作区与 macOS 是否与 VERSION 一致（CI 使用）
 #   scripts/version.sh set X.Y.Z    写入 VERSION 并同步到两个平台
 
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 VERSION_FILE="$ROOT/VERSION"
-CARGO_TOML="$ROOT/linux/Cargo.toml"
-CARGO_LOCK="$ROOT/linux/Cargo.lock"
+CARGO_TOML="$ROOT/Cargo.toml"
+CARGO_LOCK="$ROOT/Cargo.lock"
 INFO_PLIST="$ROOT/macos/Resources/Info.plist"
 # Cargo.lock 中属于本工作区的 crate（无 source 字段），版本随工作区一起变化
 WORKSPACE_CRATES='rkflash|rkflash-api|rkflash-backend|rkflash-config|rkflash-frontend'
@@ -40,11 +40,11 @@ plist_version() {
 check() {
     local v failed=0 line
     v=$(read_version)
-    [[ "$(cargo_version)" == "$v" ]] || { echo "linux/Cargo.toml: $(cargo_version) != $v"; failed=1; }
+    [[ "$(cargo_version)" == "$v" ]] || { echo "Cargo.toml: $(cargo_version) != $v"; failed=1; }
     while IFS= read -r line; do
-        [[ "${line#*=}" == "$v" ]] || { echo "linux/Cargo.lock: $line != $v"; failed=1; }
+        [[ "${line#*=}" == "$v" ]] || { echo "Cargo.lock: $line != $v"; failed=1; }
     done < <(lock_versions)
-    [[ $(lock_versions | wc -l) -eq 5 ]] || { echo "linux/Cargo.lock: 工作区 crate 数量不是 5"; failed=1; }
+    [[ $(lock_versions | wc -l) -eq 5 ]] || { echo "Cargo.lock: 工作区 crate 数量不是 5"; failed=1; }
     [[ "$(plist_version)" == "$v" ]] || { echo "macos/Info.plist: $(plist_version) != $v"; failed=1; }
     ((failed == 0)) || die "版本不一致，请执行 scripts/version.sh set $v"
     echo "版本一致：$v"
