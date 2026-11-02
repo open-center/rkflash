@@ -22,7 +22,9 @@ use rkflash_api::{
     ApplicationUpdate, DeviceControl, DeviceQuery, DeviceSnapshot, ExecutionEvent, FlashOperation,
     FlashService, ImageEntry, StorageType, WorkspaceConfig, WORKSPACE_FORMAT_VERSION,
 };
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use view_model::{AppTab, DeviceMode, ErrorToast, LogEntry, LogLevel, OperationTip, PendingAction};
@@ -45,7 +47,47 @@ fn app_icon() -> eframe::egui::IconData {
 }
 
 pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
-    let options = eframe::NativeOptions {
+    // 首选渲染器创建失败时（例如虚拟机或远程桌面没有可用的 OpenGL 2+），
+    // 换下一个渲染器重试；应用对象只有在窗口真正创建后才会被取走。
+    let slot: Rc<RefCell<Option<Box<dyn FlashService>>>> =
+        Rc::new(RefCell::new(Some(Box::new(application))));
+    let mut failures = Vec::new();
+    for &(renderer, label) in RENDERERS {
+        let pending = Rc::clone(&slot);
+        let result = eframe::run_native(
+            "RKFlash",
+            native_options(renderer),
+            Box::new(move |context| {
+                let application = pending.borrow_mut().take().ok_or("界面已启动")?;
+                Ok(Box::new(RkFlashApp::new(context, application)))
+            }),
+        );
+        match result {
+            Ok(()) => return Ok(()),
+            Err(error) => failures.push(format!("{label}：{error}")),
+        }
+        if slot.borrow().is_none() {
+            break;
+        }
+    }
+    let message = format!("启动 RKFlash 图形界面失败。{}", failures.join("；"));
+    show_startup_error(&message);
+    Err(message)
+}
+
+/// Windows 优先使用 wgpu（Direct3D 12，无显卡时由系统 WARP 软件渲染），失败再试 OpenGL；
+/// 其他平台沿用已验证的 OpenGL 渲染。
+#[cfg(windows)]
+const RENDERERS: &[(eframe::Renderer, &str)] = &[
+    (eframe::Renderer::Wgpu, "Direct3D/wgpu"),
+    (eframe::Renderer::Glow, "OpenGL"),
+];
+#[cfg(not(windows))]
+const RENDERERS: &[(eframe::Renderer, &str)] = &[(eframe::Renderer::Glow, "OpenGL")];
+
+fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        renderer,
         viewport: eframe::egui::ViewportBuilder::default()
             // Keep the Wayland app_id aligned with packaging/rkflash.desktop so
             // GNOME can group the running window with its launcher icon.
@@ -55,15 +97,22 @@ pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
             .with_min_inner_size([960.0, 700.0])
             .with_icon(app_icon()),
         ..Default::default()
-    };
-
-    eframe::run_native(
-        "RKFlash",
-        options,
-        Box::new(move |context| Ok(Box::new(RkFlashApp::new(context, Box::new(application))))),
-    )
-    .map_err(|error| format!("启动 RKFlash 图形界面失败：{error}"))
+    }
 }
+
+/// Windows 发布版没有控制台，启动失败时用对话框告知原因。
+#[cfg(windows)]
+fn show_startup_error(message: &str) {
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("RKFlash")
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+}
+
+#[cfg(not(windows))]
+fn show_startup_error(_message: &str) {}
 
 pub struct RkFlashApp {
     application: Box<dyn FlashService>,
