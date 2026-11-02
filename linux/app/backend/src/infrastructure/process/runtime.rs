@@ -69,6 +69,7 @@ struct RunContext {
     command_gate: Arc<Mutex<()>>,
     protocol: Arc<dyn ToolProtocol>,
     tool_home_directory: PathBuf,
+    tool_log_directory: PathBuf,
     operation_log_state: Arc<Mutex<OperationLogState>>,
 }
 
@@ -238,6 +239,7 @@ impl OperationExecutor for ProcessRuntime {
             command_gate: Arc::clone(&self.command_gate),
             protocol: Arc::clone(&self.protocol),
             tool_home_directory: self.tool_home_directory.clone(),
+            tool_log_directory: self.tool_log_directory(),
             operation_log_state: Arc::clone(&self.operation_log_state),
         };
 
@@ -283,6 +285,7 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
         command_gate,
         protocol,
         tool_home_directory,
+        tool_log_directory,
         operation_log_state,
     } = context;
     let Ok(_command_guard) = command_gate.lock() else {
@@ -327,7 +330,12 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
             .args(&command.args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        configure_tool_process(&mut process, &tool_path, &tool_home_directory);
+        configure_tool_process(
+            &mut process,
+            &tool_path,
+            &tool_home_directory,
+            Some(&tool_log_directory),
+        );
         let mut child = match process.spawn() {
             Ok(child) => child,
             Err(error) => {
@@ -468,8 +476,8 @@ fn spawn_output_reader<R: Read + Send + 'static>(
 #[cfg(test)]
 mod tests {
     use super::{
-        configure_tool_process, prepare_log_redirect, resolve_tool_log_directory, run_plan,
-        runtime_tool_home_directory, sanitize_terminal_text, ProcessRuntime, RunContext,
+        prepare_log_redirect, resolve_tool_log_directory, run_plan, runtime_tool_home_directory,
+        sanitize_terminal_text, ProcessRuntime, RunContext,
     };
     use crate::application::{OperationLog, ToolProtocol};
     use crate::domain::{CommandSpec, DeviceSnapshot, ExecutionEvent, ExecutionPlan};
@@ -479,13 +487,17 @@ mod tests {
 
     struct TestProtocol;
 
+    #[cfg(unix)]
     #[test]
     fn configures_external_tool_home_without_changing_its_working_directory_contract() {
+        use super::configure_tool_process;
+
         let mut command = std::process::Command::new("/opt/rkflash/tool");
         configure_tool_process(
             &mut command,
             std::path::Path::new("/opt/rkflash/tool"),
             std::path::Path::new("/tmp/rkflash-dev"),
+            None,
         );
 
         assert_eq!(
@@ -545,6 +557,7 @@ mod tests {
             command_gate: Arc::new(Mutex::new(())),
             protocol: Arc::new(TestProtocol),
             tool_home_directory: PathBuf::from("/tmp/rkflash-test-home"),
+            tool_log_directory: PathBuf::from("/tmp/rkflash-test-log"),
             operation_log_state: Arc::new(Mutex::new(Default::default())),
         };
         let plan = ExecutionPlan::single(

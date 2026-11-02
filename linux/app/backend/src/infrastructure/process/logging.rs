@@ -39,22 +39,53 @@ pub(super) fn purge_stale_runtime_directories(current: &Path) {
         let Some((pid_text, _)) = name.split_once('-') else {
             continue;
         };
-        let Ok(pid) = pid_text.parse::<libc::pid_t>() else {
-            continue;
-        };
-        if pid <= 0 {
-            continue;
+        if process_has_exited(pid_text) {
+            let _ = fs::remove_dir_all(&path);
         }
-        // SAFETY: 信号 0 只探测进程是否存在，不产生任何副作用。
-        if unsafe { libc::kill(pid, 0) } == 0 {
-            continue;
+    }
+}
+
+#[cfg(unix)]
+fn process_has_exited(pid_text: &str) -> bool {
+    let Ok(pid) = pid_text.parse::<libc::pid_t>() else {
+        return false;
+    };
+    if pid <= 0 {
+        return false;
+    }
+    // SAFETY: 信号 0 只探测进程是否存在，不产生任何副作用。
+    if unsafe { libc::kill(pid, 0) } == 0 {
+        return false;
+    }
+    // EPERM 等情况说明进程仍存在，只是属于其他用户。
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+}
+
+#[cfg(windows)]
+fn process_has_exited(pid_text: &str) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_INVALID_PARAMETER};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const STILL_ACTIVE: u32 = 259;
+
+    let Ok(pid) = pid_text.parse::<u32>() else {
+        return false;
+    };
+    if pid == 0 {
+        return false;
+    }
+    // SAFETY: 只以查询权限打开进程句柄，读取退出码后立即关闭。
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            // 进程号不存在时返回 ERROR_INVALID_PARAMETER；拒绝访问说明进程仍存在。
+            return GetLastError() == ERROR_INVALID_PARAMETER;
         }
-        let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-        if errno != libc::ESRCH {
-            // EPERM 等情况说明进程仍存在，只是属于其他用户。
-            continue;
-        }
-        let _ = fs::remove_dir_all(&path);
+        let mut exit_code = 0u32;
+        let queried = GetExitCodeProcess(handle, &mut exit_code) != 0;
+        CloseHandle(handle);
+        queried && exit_code != STILL_ACTIVE
     }
 }
 
@@ -191,6 +222,41 @@ fn local_time_parts() -> Option<(i32, i32, i32, i32, i32, i32, u32)> {
         local.tm_sec,
         duration.subsec_millis(),
     ))
+}
+
+#[cfg(windows)]
+fn local_time_parts() -> Option<(i32, i32, i32, i32, i32, i32, u32)> {
+    use windows_sys::Win32::System::SystemInformation::GetLocalTime;
+
+    // SAFETY: GetLocalTime 只写入调用方提供的 SYSTEMTIME 结构。
+    let local = unsafe {
+        let mut local = std::mem::zeroed();
+        GetLocalTime(&mut local);
+        local
+    };
+    Some((
+        i32::from(local.wYear),
+        i32::from(local.wMonth),
+        i32::from(local.wDay),
+        i32::from(local.wHour),
+        i32::from(local.wMinute),
+        i32::from(local.wSecond),
+        u32::from(local.wMilliseconds),
+    ))
+}
+
+/// Windows 创建软链接需要管理员或开发者模式，因此不做 HOME 映射：
+/// 日志目录在启动工具时通过环境变量直接传给 rkdeveloptool。
+#[cfg(windows)]
+pub(super) fn prepare_log_redirect(
+    _tool_home_directory: &Path,
+    _tool_log_relative_path: &Path,
+    log_directory: &Path,
+) -> Result<PathBuf, String> {
+    fs::create_dir_all(log_directory)
+        .map_err(|error| format!("无法创建工具日志目录 {}：{error}", log_directory.display()))?;
+    std::path::absolute(log_directory)
+        .map_err(|error| format!("无法解析工具日志目录 {}：{error}", log_directory.display()))
 }
 
 #[cfg(unix)]
