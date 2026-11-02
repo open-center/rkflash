@@ -2,13 +2,12 @@
 
 | 平台 | 文件 | 安装 |
 |---|---|---|
-| Ubuntu 22.04 / 24.04 / 26.04（amd64） | `rkflash-{VERSION}-linux-amd64.deb` + `rkflash-{VERSION}-linux-install.sh` | 两个文件放同一目录，执行 `bash rkflash-{VERSION}-linux-install.sh` |
+| Ubuntu 22.04 / 24.04 / 26.04（amd64） | `rkflash-{VERSION}-linux-amd64.deb` | 双击用“应用中心”安装，或 `sudo apt install ./rkflash-{VERSION}-linux-amd64.deb` |
 | macOS 13+ Apple Silicon | `rkflash-{VERSION}-macos-arm64.dmg` | 打开后拖入“应用程序” |
 | macOS 13+ Intel | `rkflash-{VERSION}-macos-x86_64.dmg` | 打开后拖入“应用程序” |
 
-`linux-install.sh` 是 Linux 安装器：它把同目录的 `.deb` 暂存到 `/var/tmp` 后交给 `apt` 安装，
-自动补齐系统依赖，并避免 APT 因无法读取家目录中的安装包而报错。也可以直接
-`sudo apt install ./rkflash-{VERSION}-linux-amd64.deb`（`.deb` 不在 0750 权限的家目录时）。
+从“下载”目录用 apt 安装时可能出现一行 `N: Download is performed unsandboxed as root…` 提示，
+这是因为家目录权限为 0750，属正常现象，不影响安装。
 
 校验：`sha256sum --check --ignore-missing SHA256SUMS`（macOS 用 `shasum -a 256 -c --ignore-missing SHA256SUMS`）。
 
