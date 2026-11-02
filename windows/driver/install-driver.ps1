@@ -1,7 +1,9 @@
 ﻿# 为 Rockchip USB 设备（VID 0x2207）安装 Windows 自带的 WinUSB 驱动，供 rkdeveloptool/libusb 使用。
 #
 # 1. 已连接的 Rockchip 设备：按实际 PID 安装并立即生效；
-# 2. 常见芯片的 Maskrom/Loader PID：预装到驱动库，以后插入即自动使用 WinUSB。
+# 2. 常见新款芯片的 Maskrom/Loader PID：预装到驱动库，以后插入即自动使用 WinUSB。
+#    每个 PID 都要单独生成并签名驱动（约半分钟），因此只预装少量常用 PID；
+#    其他芯片插入开发板后运行开始菜单中的“安装或修复 USB 驱动”即可。
 #
 # 注意：会替换 Rockchip 官方驱动（DriverAssitant）。如需再使用 RKDevTool，请重新安装官方驱动。
 
@@ -24,11 +26,8 @@ if (-not (Test-Administrator)) {
     exit $process.ExitCode
 }
 
-# rkdeveloptool 与 macOS 版测试中出现过的 Maskrom/Loader PID。
-$KnownPids = @(
-    '261A', '262C', '273A', '281A', '282B', '290A', '292A', '300A', '300B', '301A',
-    '310B', '310C', '320A', '320B', '320C', '330A', '330C', '350A', '350B'
-)
+# RK3588/RK3588S、RK3566/RK3568、RK3399、RK3328 的 Maskrom/Loader PID。
+$KnownPids = @('350B', '350A', '330C', '320C')
 
 $wdi = Join-Path $PSScriptRoot 'wdi-simple.exe'
 if (-not (Test-Path $wdi)) {

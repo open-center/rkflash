@@ -157,6 +157,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "rkdeveloptool -v 返回 $LASTEXITCODE" }
           & $tool ld
           "ld 返回 $LASTEXITCODE（无设备时非零属正常）"
+          $global:LASTEXITCODE = 0
 
       - name: WinUSB driver preinstalled
         shell: pwsh
