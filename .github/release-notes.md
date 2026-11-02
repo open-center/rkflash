@@ -2,11 +2,15 @@
 
 | 平台 | 文件 | 安装 |
 |---|---|---|
-| Ubuntu 22.04 / 24.04 / 26.04（amd64） | `rktools_<版本>_amd64.deb` + `rktools-linux-install.sh` | 两个文件放同一目录，执行 `./rktools-linux-install.sh` |
-| macOS 13+ Apple Silicon | `RKFlashMac-<版本>-arm64.dmg` | 打开后拖入“应用程序” |
-| macOS 13+ Intel | `RKFlashMac-<版本>-x86_64.dmg` | 打开后拖入“应用程序” |
+| Ubuntu 22.04 / 24.04 / 26.04（amd64） | `rktools-{VERSION}-linux-amd64.deb` + `rktools-{VERSION}-linux-install.sh` | 两个文件放同一目录，执行 `bash rktools-{VERSION}-linux-install.sh` |
+| macOS 13+ Apple Silicon | `rktools-{VERSION}-macos-arm64.dmg` | 打开后拖入“应用程序” |
+| macOS 13+ Intel | `rktools-{VERSION}-macos-x86_64.dmg` | 打开后拖入“应用程序” |
 
-校验：`sha256sum --check SHA256SUMS`（macOS 用 `shasum -a 256 -c SHA256SUMS`）。
+`linux-install.sh` 是 Linux 安装器：它把同目录的 `.deb` 暂存到 `/var/tmp` 后交给 `apt` 安装，
+自动补齐系统依赖，并避免 APT 因无法读取家目录中的安装包而报错。也可以直接
+`sudo apt install ./rktools-{VERSION}-linux-amd64.deb`（`.deb` 不在 0750 权限的家目录时）。
+
+校验：`sha256sum --check --ignore-missing SHA256SUMS`（macOS 用 `shasum -a 256 -c --ignore-missing SHA256SUMS`）。
 
 ## 注意
 

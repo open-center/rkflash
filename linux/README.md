@@ -247,7 +247,7 @@ sudo apt purge rktools
 目标机已具备运行依赖、且明确不需要 APT 处理依赖时，也可以使用 `dpkg` 直接处理指定文件：
 
 ```bash
-sudo dpkg --install ./output/dist/rktools_0.2.2_amd64.deb
+sudo dpkg --install ./output/dist/rktools_<版本>_amd64.deb
 ```
 
 `dpkg --install` 不访问软件仓库、不下载依赖，也不会为了安装 rktools 而修复或升级其他

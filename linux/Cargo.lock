@@ -2607,7 +2607,7 @@ dependencies = [
 
 [[package]]
 name = "rktools"
-version = "0.2.2"
+version = "0.4.0"
 dependencies = [
  "rktools-backend",
  "rktools-frontend",
@@ -2615,14 +2615,14 @@ dependencies = [
 
 [[package]]
 name = "rktools-api"
-version = "0.2.2"
+version = "0.4.0"
 dependencies = [
  "rktools-config",
 ]
 
 [[package]]
 name = "rktools-backend"
-version = "0.2.2"
+version = "0.4.0"
 dependencies = [
  "libc",
  "rktools-api",
@@ -2631,7 +2631,7 @@ dependencies = [
 
 [[package]]
 name = "rktools-config"
-version = "0.2.2"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2639,7 +2639,7 @@ dependencies = [
 
 [[package]]
 name = "rktools-frontend"
-version = "0.2.2"
+version = "0.4.0"
 dependencies = [
  "eframe",
  "image",
