@@ -114,6 +114,10 @@ project_validate_sources() {
             app/api/src app/config/src app/backend/src/domain \
             app/backend/src/application app/frontend/src
         packaging_assert_no_matches \
+            "rkflash-core 依赖了界面、契约、配置、后端或进程管理" \
+            'rkflash[_-](api|config|backend|frontend)|eframe|egui|rfd|libc|std::process|Command::new' \
+            app/core
+        packaging_assert_no_matches \
             "API 契约反向依赖了前端或后端实现" \
             'rkflash[_-](backend|frontend)|eframe|egui|rfd|libc' \
             app/api

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "app/api",
+    "app/core",
     "app/backend",
     "app/config",
     "app/frontend",
@@ -25,6 +26,7 @@ serde_json = "1"
 rkflash-api = { path = "app/api" }
 rkflash-backend = { path = "app/backend" }
 rkflash-config = { path = "app/config" }
+rkflash-core = { path = "app/core" }
 rkflash-frontend = { path = "app/frontend" }
 
 [profile.release]

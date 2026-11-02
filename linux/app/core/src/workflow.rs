@@ -3,19 +3,33 @@
 //! 整包升级流程与 macOS 版保持一致：校验 MD5 → 解包 → 核对芯片 → 进入 Maskrom →
 //! 下载包内 Loader → 写入 IDBlock → 写入分区表 → 按固件清单地址写入各分区。
 
-use super::firmware::{
-    self, chip_code_from_chip_info, chip_compatibility, chip_display_name, FirmwareInfo, Md5Status,
-    PartitionMetadata, Progress,
-};
-use super::rkdeveloptool::{parse_device_list, storage_code, DownloadItem, DownloadTarget};
-use crate::domain::{DeviceInfo, StorageType, ToolSession, Workflow};
+use crate::chip::{chip_code_from_chip_info, chip_compatibility, chip_display_name};
+use crate::firmware::{self, FirmwareInfo, Md5Status, Progress};
+use crate::partition::PartitionMetadata;
+use crate::rkdeveloptool::{parse_device_list, Storage, UsbDevice};
+use crate::session::{ToolSession, Workflow};
 use std::cell::RefCell;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MODE_SWITCH_TIMEOUT: Duration = Duration::from_secs(20);
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
+
+/// 下载列表中的一项：已知的 Rockchip 分区按名称写入，其余按起始扇区写入。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DownloadTarget {
+    Partition(String),
+    Sector(OsString),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadItem {
+    pub name: String,
+    pub target: DownloadTarget,
+    pub path: PathBuf,
+}
 
 fn args<const N: usize>(items: [&dyn AsRef<std::ffi::OsStr>; N]) -> Vec<OsString> {
     items
@@ -24,13 +38,13 @@ fn args<const N: usize>(items: [&dyn AsRef<std::ffi::OsStr>; N]) -> Vec<OsString
         .collect()
 }
 
-fn list_devices(session: &mut dyn ToolSession) -> Result<Vec<DeviceInfo>, String> {
+fn list_devices(session: &mut dyn ToolSession) -> Result<Vec<UsbDevice>, String> {
     // 没有设备时 ld 以非零状态退出，这里只关心解析结果。
     let outcome = session.probe(&args([&"ld"]))?;
     Ok(parse_device_list(&outcome.output))
 }
 
-fn single_device(session: &mut dyn ToolSession) -> Result<DeviceInfo, String> {
+fn single_device(session: &mut dyn ToolSession) -> Result<UsbDevice, String> {
     let mut devices = list_devices(session)?;
     match devices.len() {
         0 => Err("未检测到 Rockchip 设备，请确认开发板已进入 Loader 或 Maskrom 模式".to_owned()),
@@ -39,7 +53,7 @@ fn single_device(session: &mut dyn ToolSession) -> Result<DeviceInfo, String> {
     }
 }
 
-fn wait_for_mode(session: &mut dyn ToolSession, mode: &str) -> Result<DeviceInfo, String> {
+fn wait_for_mode(session: &mut dyn ToolSession, mode: &str) -> Result<UsbDevice, String> {
     let deadline = Instant::now() + MODE_SWITCH_TIMEOUT;
     while Instant::now() < deadline {
         if session.is_cancelled() {
@@ -53,10 +67,7 @@ fn wait_for_mode(session: &mut dyn ToolSession, mode: &str) -> Result<DeviceInfo
                 devices.len()
             ));
         }
-        if let Some(device) = devices
-            .into_iter()
-            .find(|device| device.mode.eq_ignore_ascii_case(mode))
-        {
+        if let Some(device) = devices.into_iter().find(|device| device.is_mode(mode)) {
             session.status(&format!("设备已重新枚举为 {}", device.mode));
             return Ok(device);
         }
@@ -115,14 +126,16 @@ struct WorkDirectory(PathBuf);
 
 impl WorkDirectory {
     fn new(label: &str) -> Self {
+        static SEQUENCE: AtomicU64 = AtomicU64::new(0);
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
+        let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
         Self(
             std::env::temp_dir()
                 .join("rkflash")
-                .join(format!("{label}-{}-{nonce}", std::process::id())),
+                .join(format!("{label}-{nonce}-{sequence}")),
         )
     }
 }
@@ -154,13 +167,13 @@ fn with_progress<T>(
     })
 }
 
-pub(super) struct DownloadWorkflow {
+pub struct DownloadWorkflow {
     items: Vec<DownloadItem>,
     reset_after: bool,
 }
 
 impl DownloadWorkflow {
-    pub(super) fn new(mut items: Vec<DownloadItem>, reset_after: bool) -> Self {
+    pub fn new(mut items: Vec<DownloadItem>, reset_after: bool) -> Self {
         // 分区表必须先写入，按名称写入的分区才能找到位置。
         items.sort_by_key(|item| !is_partition_table(&item.name, &item.path));
         Self { items, reset_after }
@@ -199,14 +212,14 @@ impl Workflow for DownloadWorkflow {
     }
 }
 
-pub(super) struct FirmwareUpgradeWorkflow {
+pub struct FirmwareUpgradeWorkflow {
     info: FirmwareInfo,
-    storage: StorageType,
+    storage: Storage,
     reset_after: bool,
 }
 
 impl FirmwareUpgradeWorkflow {
-    pub(super) fn new(info: FirmwareInfo, storage: StorageType, reset_after: bool) -> Self {
+    pub fn new(info: FirmwareInfo, storage: Storage, reset_after: bool) -> Self {
         Self {
             info,
             storage,
@@ -282,20 +295,20 @@ impl Workflow for FirmwareUpgradeWorkflow {
 
         let mut device = single_device(session)?;
         self.check_chip(session)?;
-        if device.mode.eq_ignore_ascii_case("Loader") {
+        if device.is_mode("Loader") {
             session
                 .run("切换到 Maskrom", &args([&"rd", &"3"]))?
                 .require("切换到 Maskrom")?;
             device = wait_for_mode(session, "Maskrom")?;
         }
-        if !device.mode.eq_ignore_ascii_case("Maskrom") {
+        if !device.is_mode("Maskrom") {
             return Err(format!(
                 "设备处于 {} 模式，需要 Loader 或 Maskrom 模式",
                 device.mode
             ));
         }
 
-        let storage = storage_code(self.storage)?;
+        let storage = self.storage.code();
         // 已下载过 Loader 的设备仍可能报告为 Maskrom，重复 db 可能卡住 USB：
         // 先探测能否切换存储，只对真正的 BootROM Maskrom 下载 Loader。
         let session_ready = match storage {
@@ -358,12 +371,12 @@ impl Workflow for FirmwareUpgradeWorkflow {
     }
 }
 
-pub(super) struct EraseFlashWorkflow {
+pub struct EraseFlashWorkflow {
     info: FirmwareInfo,
 }
 
 impl EraseFlashWorkflow {
-    pub(super) fn new(info: FirmwareInfo) -> Self {
+    pub fn new(info: FirmwareInfo) -> Self {
         Self { info }
     }
 }
@@ -375,7 +388,7 @@ impl Workflow for EraseFlashWorkflow {
 
     fn run(self: Box<Self>, session: &mut dyn ToolSession) -> Result<String, String> {
         let device = single_device(session)?;
-        if device.mode.eq_ignore_ascii_case("Maskrom") {
+        if device.is_mode("Maskrom") {
             let work = WorkDirectory::new("erase");
             let loader = firmware::extract_loader(&self.info, &work.0)?;
             session
@@ -392,7 +405,7 @@ impl Workflow for EraseFlashWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::ToolOutcome;
+    use crate::session::ToolOutcome;
     use std::collections::VecDeque;
 
     /// 按顺序返回预设输出的会话，记录工作流实际调用的命令。
@@ -436,8 +449,7 @@ mod tests {
 
     #[test]
     fn download_writes_partition_table_first_and_uses_names() {
-        let directory =
-            std::env::temp_dir().join(format!("rkflash-download-{}", std::process::id()));
+        let directory = std::env::temp_dir().join("rkflash-core-download-test");
         std::fs::create_dir_all(&directory).unwrap();
         let parameter = directory.join("parameter.txt");
         std::fs::write(

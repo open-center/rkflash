@@ -3,7 +3,8 @@
 //! 与 macOS 版 RKFirmwareImage.swift 保持同一套格式规则：只依据文件头 magic、
 //! 偏移表和 payload 内容判断格式，所有偏移和长度先做越界检查再读取。
 
-use super::md5::Md5;
+use crate::chip::chip_display_name;
+use crate::md5::Md5;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -14,29 +15,28 @@ const RKAF_TABLE_OFFSET: u64 = 0x8c;
 const RKAF_ENTRY_SIZE: u64 = 0x70;
 const MAXIMUM_PARTS: u32 = 16;
 const COPY_CHUNK: usize = 4 * 1024 * 1024;
-const METADATA_PROBE_LIMIT: u64 = 512 * 1024 + 12;
 
 /// 读取大文件时的进度回调（已处理字节数, 总字节数）与取消检查。
-pub(crate) struct Progress<'a> {
+pub struct Progress<'a> {
     pub report: &'a mut dyn FnMut(u64, u64),
     pub cancelled: &'a dyn Fn() -> bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Container {
+pub enum Container {
     Rkfw,
     Rkaf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Md5Status {
+pub enum Md5Status {
     Valid,
     Invalid,
     NotPresent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FirmwarePartition {
+pub struct FirmwarePartition {
     pub name: String,
     pub filename: String,
     pub data_offset: u64,
@@ -68,7 +68,7 @@ impl FirmwarePartition {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct FirmwareInfo {
+pub struct FirmwareInfo {
     pub source: PathBuf,
     pub container: Container,
     pub firmware_version: Option<String>,
@@ -83,7 +83,7 @@ pub(crate) struct FirmwareInfo {
 }
 
 impl FirmwareInfo {
-    pub(crate) fn chip_name(&self) -> String {
+    pub fn chip_name(&self) -> String {
         self.chip_code
             .map(chip_display_name)
             .unwrap_or_else(|| "未知".to_owned())
@@ -92,19 +92,19 @@ impl FirmwareInfo {
 
 /// 解包后待烧录的分区：按固件清单中的地址写入。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FlashItem {
+pub struct FlashItem {
     pub partition_name: String,
     pub address: u64,
     pub image_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Extraction {
+pub struct Extraction {
     pub loader_path: Option<PathBuf>,
     pub items: Vec<FlashItem>,
 }
 
-pub(crate) fn inspect(path: &Path) -> Result<FirmwareInfo, String> {
+pub fn inspect(path: &Path) -> Result<FirmwareInfo, String> {
     let mut file = File::open(path).map_err(|error| format!("无法打开固件文件：{error}"))?;
     let file_size = file
         .metadata()
@@ -224,7 +224,7 @@ pub(crate) fn inspect(path: &Path) -> Result<FirmwareInfo, String> {
 }
 
 /// 校验 RKFW 尾部附带的 MD5；需要读取整个固件，只能在后台线程调用。
-pub(crate) fn verify_md5(info: &FirmwareInfo, progress: Progress<'_>) -> Result<Md5Status, String> {
+pub fn verify_md5(info: &FirmwareInfo, progress: Progress<'_>) -> Result<Md5Status, String> {
     if info.container != Container::Rkfw {
         return Ok(Md5Status::NotPresent);
     }
@@ -278,7 +278,7 @@ pub(crate) fn verify_md5(info: &FirmwareInfo, progress: Progress<'_>) -> Result<
 }
 
 /// 把包内 Loader 与各分区解包到 `directory`；重复引用同一 payload 的分区只写一次。
-pub(crate) fn extract(
+pub fn extract(
     info: &FirmwareInfo,
     directory: &Path,
     progress: Progress<'_>,
@@ -360,7 +360,7 @@ pub(crate) fn extract(
 }
 
 /// 只解包固件内置的 Loader（擦除 Flash 前初始化 Maskrom 所需）。
-pub(crate) fn extract_loader(info: &FirmwareInfo, directory: &Path) -> Result<PathBuf, String> {
+pub fn extract_loader(info: &FirmwareInfo, directory: &Path) -> Result<PathBuf, String> {
     let (offset, size) = info
         .loader_extent
         .filter(|(_, size)| *size > 0)
@@ -385,156 +385,6 @@ pub(crate) fn extract_loader(info: &FirmwareInfo, directory: &Path) -> Result<Pa
         &|| false,
     )?;
     Ok(destination)
-}
-
-/// 分区元数据文件的内容格式；决定使用 `gpt` 还是 `prm` 写入。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PartitionMetadata {
-    GptImage,
-    GptParameter,
-    LegacyParameter,
-    UnknownParameter,
-    Other,
-}
-
-impl PartitionMetadata {
-    pub(crate) fn inspect(path: &Path) -> Result<Self, String> {
-        let file =
-            File::open(path).map_err(|error| format!("无法读取 {}：{error}", path.display()))?;
-        let mut data = Vec::new();
-        file.take(METADATA_PROBE_LIMIT)
-            .read_to_end(&mut data)
-            .map_err(|error| format!("无法读取 {}：{error}", path.display()))?;
-        Ok(Self::inspect_bytes(&data))
-    }
-
-    pub(crate) fn inspect_bytes(data: &[u8]) -> Self {
-        if data.len() >= 520 && &data[512..520] == b"EFI PART" {
-            return Self::GptImage;
-        }
-        let mut body = data;
-        let mut wrapped = false;
-        if data.len() >= 8 && &data[..4] == b"PARM" {
-            wrapped = true;
-            let length = le32(data, 4) as usize;
-            if 8 + length > data.len() {
-                return Self::UnknownParameter;
-            }
-            body = &data[8..8 + length];
-        }
-        let Ok(text) = std::str::from_utf8(body) else {
-            return if wrapped {
-                Self::UnknownParameter
-            } else {
-                Self::Other
-            };
-        };
-        match parameter_layout(text) {
-            Some(true) => Self::GptParameter,
-            Some(false) => Self::LegacyParameter,
-            None if wrapped || looks_like_parameter(text) => Self::UnknownParameter,
-            None => Self::Other,
-        }
-    }
-
-    pub(crate) fn is_partition_table(self) -> bool {
-        self != Self::Other
-    }
-}
-
-/// `Some(true)` 为 GPT 布局，`Some(false)` 为传统 mtdparts 布局，`None` 为无法判断。
-fn parameter_layout(text: &str) -> Option<bool> {
-    let mut has_mtdparts = false;
-    for line in text.lines().map(str::trim) {
-        if line.starts_with('#') {
-            continue;
-        }
-        let Some((key, raw_value)) = line.split_once(':') else {
-            continue;
-        };
-        let key = key.trim();
-        let raw_value = raw_value.trim();
-        if key.eq_ignore_ascii_case("TYPE") {
-            let value = raw_value.split_whitespace().next().unwrap_or_default();
-            return if value.eq_ignore_ascii_case("GPT") {
-                Some(true)
-            } else if value.eq_ignore_ascii_case("MTD") {
-                Some(false)
-            } else {
-                None
-            };
-        }
-        if key.eq_ignore_ascii_case("CMDLINE")
-            && raw_value.to_ascii_lowercase().contains("mtdparts=")
-        {
-            has_mtdparts = true;
-        }
-    }
-    has_mtdparts.then_some(false)
-}
-
-fn looks_like_parameter(text: &str) -> bool {
-    const KEYS: &[&str] = &[
-        "FIRMWARE_VER",
-        "MACHINE_MODEL",
-        "MACHINE_ID",
-        "MANUFACTURER",
-        "MAGIC",
-        "ATAG",
-        "MACHINE",
-        "CHECK_MASK",
-        "PWR_HLD",
-        "TYPE",
-        "CMDLINE",
-    ];
-    text.lines().map(str::trim).any(|line| {
-        !line.starts_with('#')
-            && line
-                .split_once(':')
-                .is_some_and(|(key, _)| KEYS.contains(&key.trim().to_ascii_uppercase().as_str()))
-    })
-}
-
-/// 从 `rci` 输出的 “Chip Info:” 后读取 4 字节芯片编码。
-pub(crate) fn chip_code_from_chip_info(output: &str) -> Option<u32> {
-    let lower = output.to_ascii_lowercase();
-    let start = lower.find("chip info:")? + "chip info:".len();
-    let bytes: Vec<u8> = output[start..]
-        .split_whitespace()
-        .filter_map(|token| u8::from_str_radix(token, 16).ok())
-        .take(4)
-        .collect();
-    (bytes.len() == 4).then(|| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-}
-
-fn modern_chip_number(code: u32) -> Option<String> {
-    let bytes = code.to_le_bytes();
-    bytes
-        .iter()
-        .all(u8::is_ascii_digit)
-        .then(|| bytes.iter().rev().map(|byte| char::from(*byte)).collect())
-}
-
-pub(crate) fn chip_display_name(code: u32) -> String {
-    if let Some(number) = modern_chip_number(code) {
-        return format!("RK{number}");
-    }
-    match code {
-        0x35 => "RK3588 / RK3588S".to_owned(),
-        0x38 => "RK3566 / RK3568".to_owned(),
-        0x39 => "RK3528".to_owned(),
-        0x33 => "RK3399 / RK3399Pro".to_owned(),
-        0x30 => "PX30 / RK3326".to_owned(),
-        _ => format!("未知 (0x{code:08X})"),
-    }
-}
-
-/// `Some(false)` 表示确定不匹配；`None` 表示两种编码格式不同、无法自动严格比对。
-pub(crate) fn chip_compatibility(firmware: u32, device: u32) -> Option<bool> {
-    if firmware == device {
-        return Some(true);
-    }
-    Some(modern_chip_number(firmware)? == modern_chip_number(device)?)
 }
 
 fn inspect_loader_version(
@@ -686,6 +536,7 @@ fn c_string(data: &[u8], offset: usize, count: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::partition::PartitionMetadata;
 
     struct Part<'a> {
         name: &'a str,
@@ -744,11 +595,11 @@ mod tests {
     }
 
     fn temp_dir(label: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "rkflash-firmware-{label}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("rkflash-firmware-{label}-{nonce}"));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
         path
@@ -891,45 +742,5 @@ mod tests {
         };
         assert!(safe_output_name(&partition).is_err());
         fs::remove_dir_all(directory).unwrap();
-    }
-
-    #[test]
-    fn classifies_partition_metadata_by_content() {
-        let mut gpt = vec![0u8; 1024];
-        gpt[512..520].copy_from_slice(b"EFI PART");
-        assert_eq!(
-            PartitionMetadata::inspect_bytes(&gpt),
-            PartitionMetadata::GptImage
-        );
-        assert_eq!(
-            PartitionMetadata::inspect_bytes(
-                b"CMDLINE: console=ttyS0 mtdparts=rk29xxnand:0x2000@0x4000(uboot)"
-            ),
-            PartitionMetadata::LegacyParameter
-        );
-        assert_eq!(
-            PartitionMetadata::inspect_bytes(b"MACHINE_MODEL: test\n"),
-            PartitionMetadata::UnknownParameter
-        );
-        assert_eq!(
-            PartitionMetadata::inspect_bytes(b"\x7fELF binary"),
-            PartitionMetadata::Other
-        );
-    }
-
-    #[test]
-    fn reads_chip_code_and_compares_formats() {
-        let output = "Chip Info:  38 38 35 33 0 0 0 0\r\n";
-        let code = chip_code_from_chip_info(output).unwrap();
-        assert_eq!(chip_display_name(code), "RK3588");
-        assert_eq!(
-            chip_compatibility(code, u32::from_le_bytes(*b"8853")),
-            Some(true)
-        );
-        assert_eq!(
-            chip_compatibility(code, u32::from_le_bytes(*b"6653")),
-            Some(false)
-        );
-        assert_eq!(chip_compatibility(code, 0x35), None);
     }
 }

@@ -1,5 +1,5 @@
 use super::parameter::parse_parameter;
-use super::parser::{extract_failure, extract_progress, parse_device_list};
+use super::parser::parse_device_list;
 use super::profile::RockchipProfile;
 use crate::application::{FlashPlanner, FlashProfile, ToolProtocol};
 use crate::domain::{
@@ -7,6 +7,7 @@ use crate::domain::{
     FlashOperation,
 };
 use rkflash_config::ImageEntry;
+use rkflash_core::output::{extract_failure, extract_progress};
 use std::ffi::OsString;
 use std::path::PathBuf;
 

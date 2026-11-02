@@ -1,48 +1,13 @@
+//! 把 parameter 分区映射为下载列表条目；解析规则位于 rkflash-core。
+
 use rkflash_config::ImageEntry;
+use rkflash_core::partition::parse_parameter_partitions;
 
 pub(super) fn parse_parameter(text: &str) -> Result<Vec<ImageEntry>, String> {
-    let marker = "mtdparts=";
-    let start = text
-        .find(marker)
-        .ok_or_else(|| "未找到 mtdparts 分区定义".to_owned())?;
-    let definition = &text[start + marker.len()..];
-    let definition = definition
-        .split_whitespace()
-        .next()
-        .unwrap_or(definition)
-        .trim_matches(|character| character == '\'' || character == '"');
-    let partitions = definition
-        .split_once(':')
-        .map(|(_, value)| value)
-        .unwrap_or(definition);
-
-    let mut entries = Vec::new();
-    for item in partitions.split(',') {
-        let item = item.trim();
-        let open = item
-            .find('(')
-            .ok_or_else(|| format!("无法解析分区项：{item}"))?;
-        let close = item[open + 1..]
-            .find(')')
-            .map(|index| index + open + 1)
-            .ok_or_else(|| format!("分区名缺少右括号：{item}"))?;
-        let name = item[open + 1..close].trim();
-        let before_name = &item[..open];
-        let address = before_name
-            .split_once('@')
-            .map(|(_, value)| value.trim())
-            .ok_or_else(|| format!("分区缺少起始地址：{item}"))?;
-        if name.is_empty() || address.is_empty() {
-            return Err(format!("分区名或地址为空：{item}"));
-        }
-        entries.push(ImageEntry::new(false, address, name));
-    }
-
-    if entries.is_empty() {
-        Err("分区表为空".to_owned())
-    } else {
-        Ok(entries)
-    }
+    Ok(parse_parameter_partitions(text)?
+        .into_iter()
+        .map(|partition| ImageEntry::new(false, &partition.address, &partition.name))
+        .collect())
 }
 
 #[cfg(test)]

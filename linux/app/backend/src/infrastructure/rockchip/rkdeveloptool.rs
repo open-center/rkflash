@@ -1,16 +1,19 @@
-//! 开源 rkdeveloptool（内置 libusb）的命令规划与输出协议；Windows 版使用该后端。
+//! rkdeveloptool 后端适配器：把类型化操作映射为 rkflash-core 的命令与工作流（Windows 版使用）。
 
-use super::firmware;
 use super::parameter::parse_parameter;
-use super::parser::{extract_failure, extract_progress};
 use super::profile::RockchipProfile;
-use super::workflow::{DownloadWorkflow, EraseFlashWorkflow, FirmwareUpgradeWorkflow};
 use crate::application::{FlashPlanner, FlashProfile, ToolProtocol};
 use crate::domain::{
     normalize_sector, CommandSpec, DeviceControl, DeviceInfo, DeviceQuery, DeviceSnapshot,
     ExecutionPlan, FlashOperation, StorageType,
 };
 use rkflash_config::ImageEntry;
+use rkflash_core::firmware;
+use rkflash_core::output::extract_progress;
+use rkflash_core::rkdeveloptool::{self as protocol, Storage};
+use rkflash_core::workflow::{
+    DownloadItem, DownloadTarget, DownloadWorkflow, EraseFlashWorkflow, FirmwareUpgradeWorkflow,
+};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -27,12 +30,12 @@ fn sector_arg(value: &str, label: &str) -> Result<OsString, String> {
         .map_err(|error| format!("{label}{error}"))
 }
 
-/// `cs` 命令的存储编号：1=eMMC，2=SD，9=SPI NOR。
-pub(super) fn storage_code(storage: StorageType) -> Result<Option<&'static str>, String> {
+/// 界面的存储选项映射为 rkdeveloptool 支持的存储；SPI NAND 没有对应的 `cs` 编号。
+fn target_storage(storage: StorageType) -> Result<Storage, String> {
     match storage {
-        StorageType::Auto => Ok(None),
-        StorageType::Emmc => Ok(Some("1")),
-        StorageType::SpiNor => Ok(Some("9")),
+        StorageType::Auto => Ok(Storage::Auto),
+        StorageType::Emmc => Ok(Storage::Emmc),
+        StorageType::SpiNor => Ok(Storage::SpiNor),
         StorageType::SpiNand => Err(format!("{UNSUPPORTED}：SPI NAND 存储")),
     }
 }
@@ -54,14 +57,14 @@ impl FlashPlanner for RkDevelopToolAdapter {
             FlashOperation::UpgradeFirmware {
                 firmware,
                 no_reset,
-                storage,
+                storage: target,
             } => {
-                storage_code(*storage)?;
+                let target = target_storage(*target)?;
                 Ok(ExecutionPlan::workflow(
                     name,
                     Box::new(FirmwareUpgradeWorkflow::new(
                         firmware::inspect(firmware)?,
-                        *storage,
+                        target,
                         !*no_reset,
                     )),
                 ))
@@ -82,7 +85,7 @@ impl FlashPlanner for RkDevelopToolAdapter {
             }
             FlashOperation::UpgradeLoader { loader, storage } => {
                 let mut commands = Vec::new();
-                if let Some(code) = storage_code(*storage)? {
+                if let Some(code) = target_storage(*storage)?.code() {
                     commands.push(CommandSpec::new("切换存储", ["cs", code]));
                 }
                 commands.push(CommandSpec::new(
@@ -138,7 +141,7 @@ impl FlashPlanner for RkDevelopToolAdapter {
             FlashOperation::Control(control) => *control == DeviceControl::Reboot,
             FlashOperation::ExportSerialLog { .. } => false,
             FlashOperation::UpgradeLoader { storage, .. }
-            | FlashOperation::UpgradeFirmware { storage, .. } => storage_code(*storage).is_ok(),
+            | FlashOperation::UpgradeFirmware { storage, .. } => target_storage(*storage).is_ok(),
             _ => true,
         }
     }
@@ -158,20 +161,6 @@ fn query_code(query: DeviceQuery) -> Option<&'static str> {
         DeviceQuery::TestDevice => Some("td"),
         DeviceQuery::UsbSerialNumber | DeviceQuery::SecureMode => None,
     }
-}
-
-/// 下载列表中的一项：已知的 Rockchip 分区按名称写入，其余按起始扇区写入。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum DownloadTarget {
-    Partition(String),
-    Sector(OsString),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct DownloadItem {
-    pub name: String,
-    pub target: DownloadTarget,
-    pub path: PathBuf,
 }
 
 impl RkDevelopToolAdapter {
@@ -227,7 +216,17 @@ impl ToolProtocol for RkDevelopToolAdapter {
 
     fn parse_device_list(&self, text: &str) -> DeviceSnapshot {
         DeviceSnapshot {
-            devices: parse_device_list(text),
+            devices: protocol::parse_device_list(text)
+                .into_iter()
+                .map(|device| DeviceInfo {
+                    number: device.number,
+                    vid: device.vid,
+                    pid: device.pid,
+                    location: device.location,
+                    mode: device.mode,
+                    serial: String::new(),
+                })
+                .collect(),
             error: None,
         }
     }
@@ -237,68 +236,17 @@ impl ToolProtocol for RkDevelopToolAdapter {
     }
 
     fn parse_failure(&self, line: &str) -> Option<String> {
-        let lower = line.to_ascii_lowercase();
-        if lower.contains("does not support") || lower.contains("command is invalid") {
-            return Some(line.trim().to_owned());
-        }
-        extract_failure(line)
+        protocol::parse_failure(line)
     }
 
     fn is_transient(&self, line: &str) -> bool {
-        (line.starts_with("Write LBA from file (") || line.starts_with("Read LBA to file ("))
-            && !line.contains("(100%)")
+        protocol::is_transient(line)
     }
-}
-
-/// 解析 `DevNo=1\tVid=0x2207,Pid=0x350b,LocationID=104\tMaskrom`。
-pub(super) fn parse_device_list(text: &str) -> Vec<DeviceInfo> {
-    text.lines()
-        .filter_map(|line| {
-            let line = line.trim();
-            let rest = line.strip_prefix("DevNo=")?;
-            let fields: Vec<&str> = rest
-                .split(|character: char| character.is_whitespace() || character == ',')
-                .filter(|field| !field.is_empty())
-                .collect();
-            let value = |key: &str| {
-                fields
-                    .iter()
-                    .find_map(|field| field.strip_prefix(key))
-                    .unwrap_or_default()
-                    .to_owned()
-            };
-            Some(DeviceInfo {
-                number: fields.first()?.to_string(),
-                vid: value("Vid="),
-                pid: value("Pid="),
-                location: value("LocationID="),
-                mode: fields
-                    .last()
-                    .filter(|field| !field.contains('='))?
-                    .to_string(),
-                serial: String::new(),
-            })
-        })
-        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parses_rkdeveloptool_device_list() {
-        let devices = parse_device_list(
-            "DevNo=1\tVid=0x2207,Pid=0x350b,LocationID=104\tMaskrom\r\nDevNo=2\tVid=0x2207,Pid=0x330c,LocationID=203\tLoader\r\n",
-        );
-        assert_eq!(devices.len(), 2);
-        assert_eq!(devices[0].number, "1");
-        assert_eq!(devices[0].pid, "0x350b");
-        assert_eq!(devices[0].mode, "Maskrom");
-        assert_eq!(devices[1].location, "203");
-        assert_eq!(devices[1].mode, "Loader");
-        assert!(parse_device_list("Not found any devices!\r\n").is_empty());
-    }
 
     #[test]
     fn maps_queries_and_rejects_unsupported_operations() {
@@ -355,10 +303,12 @@ mod tests {
     }
 
     #[test]
-    fn progress_refresh_lines_stay_out_of_the_log() {
+    fn protocol_delegates_device_and_progress_parsing_to_core() {
         let adapter = RkDevelopToolAdapter::default();
+        let snapshot =
+            adapter.parse_device_list("DevNo=1\tVid=0x2207,Pid=0x350b,LocationID=104\tMaskrom");
+        assert_eq!(snapshot.devices[0].mode, "Maskrom");
         assert!(adapter.is_transient("Write LBA from file (45%)"));
-        assert!(!adapter.is_transient("Write LBA from file (100%)"));
         assert_eq!(
             adapter.parse_progress("Write LBA from file (45%)"),
             Some(0.45)

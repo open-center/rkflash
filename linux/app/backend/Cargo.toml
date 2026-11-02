@@ -10,6 +10,7 @@ description = "RKFlash application, domain and Rockchip infrastructure backend"
 libc.workspace = true
 rkflash-api.workspace = true
 rkflash-config.workspace = true
+rkflash-core.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

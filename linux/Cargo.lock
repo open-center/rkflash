@@ -2629,6 +2629,7 @@ dependencies = [
  "libc",
  "rkflash-api",
  "rkflash-config",
+ "rkflash-core",
  "windows-sys 0.59.0",
 ]
 
@@ -2639,6 +2640,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "rkflash-core"
+version = "0.4.1"
 
 [[package]]
 name = "rkflash-frontend"
