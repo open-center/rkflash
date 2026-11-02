@@ -3,6 +3,7 @@
 SHELL := /bin/zsh
 
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+NATIVE := $(abspath $(ROOT)/../native)
 BUILD_DIR := $(ROOT)/build
 APP_NAME := RKFlash
 XCODE_PRODUCT_DIR := $(strip $(TARGET_BUILD_DIR))
@@ -20,7 +21,7 @@ DEBUG_ENTITLEMENTS := $(ROOT)/Resources/RKFlash.debug.entitlements
 TOOL_ENTITLEMENTS := $(ROOT)/Resources/rkdeveloptool.entitlements
 THIRD_PARTY_NOTICE := $(ROOT)/THIRD_PARTY.md
 GPL_LICENSE := $(ROOT)/LICENSE
-LGPL_LICENSE := $(ROOT)/Vendor/libusb/COPYING
+LGPL_LICENSE := $(NATIVE)/libusb/COPYING
 APP_VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' $(INFO_PLIST))
 DIST_DIR := $(BUILD_DIR)/dist
 DMG_NAME = $(APP_NAME)-$(APP_VERSION)-$(ARCH).dmg
@@ -48,7 +49,7 @@ else
 SWIFT_OPT_FLAGS := -O
 endif
 
-LIBUSB_ROOT := $(ROOT)/Vendor/libusb
+LIBUSB_ROOT := $(NATIVE)/libusb
 LIBUSB_SOURCE_ROOT := $(LIBUSB_ROOT)/libusb
 LIBUSB_SOURCES := \
 	$(LIBUSB_SOURCE_ROOT)/core.c \
@@ -63,7 +64,7 @@ LIBUSB_SOURCES := \
 LIBUSB_OBJECTS := $(patsubst $(LIBUSB_SOURCE_ROOT)/%.c,$(BUILD_DIR)/libusb/%.o,$(LIBUSB_SOURCES))
 LIBUSB_ARCHIVE := $(BUILD_DIR)/lib/libusb-1.0.a
 
-RK_ROOT := $(ROOT)/Vendor/rkdeveloptool
+RK_ROOT := $(NATIVE)/rkdeveloptool
 RK_SOURCES := $(wildcard $(RK_ROOT)/*.cpp)
 RK_OBJECTS := $(patsubst $(RK_ROOT)/%.cpp,$(BUILD_DIR)/rkdeveloptool/%.o,$(RK_SOURCES))
 RK_TOOL := $(BUILD_DIR)/bin/rkdeveloptool
@@ -78,7 +79,7 @@ LIBUSB_CFLAGS := -std=gnu11 -O2 -DNDEBUG -fvisibility=hidden -pthread \
 	$(COMMON_TARGET_FLAGS) -I$(LIBUSB_ROOT)/Xcode -I$(LIBUSB_SOURCE_ROOT)
 RK_CXXFLAGS := -std=gnu++17 -O2 -Wall -Wextra -Werror -Wno-deprecated-declarations \
 	-fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -D_LARGE_FILE $(COMMON_TARGET_FLAGS) \
-	-I$(ROOT)/Core -I$(RK_ROOT) -I$(LIBUSB_ROOT)/Xcode -I$(LIBUSB_SOURCE_ROOT)
+	-I$(NATIVE)/core -I$(RK_ROOT) -I$(LIBUSB_ROOT)/Xcode -I$(LIBUSB_SOURCE_ROOT)
 
 .PHONY: all app core check sandbox-check universal-app universal-check run install dmg clean
 
@@ -100,7 +101,7 @@ $(LIBUSB_ARCHIVE): $(LIBUSB_OBJECTS) | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(AR) rcs $@ $^
 
-$(BUILD_DIR)/rkdeveloptool/%.o: $(RK_ROOT)/%.cpp $(ROOT)/Core/config.h | $(BUILD_DIR)
+$(BUILD_DIR)/rkdeveloptool/%.o: $(RK_ROOT)/%.cpp $(NATIVE)/core/config.h | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CXX) $(RK_CXXFLAGS) -c $< -o $@
 
@@ -152,9 +153,9 @@ $(MODEL_TEST): $(ROOT)/App/RKModels.swift $(ROOT)/App/RKFirmwareImage.swift $(RO
 	@mkdir -p $(dir $@)
 	$(SWIFTC) -swift-version 5 -parse-as-library -target $(TARGET) -sdk $(SDKROOT) $^ -o $@
 
-$(FILE_FORMAT_TEST): $(ROOT)/Core/file_format.h $(ROOT)/Tests/RKFileFormatTests.cpp | $(BUILD_DIR)
+$(FILE_FORMAT_TEST): $(NATIVE)/core/file_format.h $(ROOT)/Tests/RKFileFormatTests.cpp | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	$(CXX) -std=gnu++17 $(COMMON_TARGET_FLAGS) -I$(ROOT)/Core $(ROOT)/Tests/RKFileFormatTests.cpp -o $@
+	$(CXX) -std=gnu++17 $(COMMON_TARGET_FLAGS) -I$(NATIVE)/core $(ROOT)/Tests/RKFileFormatTests.cpp -o $@
 
 check: $(APP_BUNDLE) $(MODEL_TEST) $(FILE_FORMAT_TEST)
 	plutil -lint $(APP_CONTENTS)/Info.plist
