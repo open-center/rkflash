@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// 按钮因任务运行或平台不支持而禁用时的提示。
+pub(super) const UNSUPPORTED_HINT: &str = "任务运行中，或当前平台的烧录工具不支持该操作";
+
 impl RkFlashApp {
     pub(super) fn apply_tool_log_directory(&mut self, path: PathBuf) {
         match self.application.set_tool_log_directory(path) {
@@ -19,7 +22,11 @@ impl RkFlashApp {
 
     pub(super) fn pick_upgrade_tool(&mut self) {
         self.spawn_file_dialog(
-            FileDialogSpec::pick_file("选择 upgrade_tool", "可执行文件", &[]),
+            FileDialogSpec::pick_file(
+                &format!("选择 {}", self.application.tool_name()),
+                "可执行文件",
+                &[],
+            ),
             FileDialogTarget::ToolExecutable,
         );
     }
@@ -201,13 +208,15 @@ impl RkFlashApp {
     }
 
     pub(super) fn query_button(&mut self, ui: &mut egui::Ui, label: &str, query: DeviceQuery) {
+        let supported = self.application.supports(&FlashOperation::Query { query });
         if ui
             .add_enabled(
-                !self.application.is_active(),
+                supported && !self.application.is_active(),
                 egui::Button::new(RichText::new(label).color(theme::TEXT))
                     .fill(theme::PANEL_RAISED)
                     .stroke(Stroke::new(1.0_f32, theme::BORDER)),
             )
+            .on_disabled_hover_text(UNSUPPORTED_HINT)
             .clicked()
         {
             self.run_query(query);
@@ -225,9 +234,10 @@ impl RkFlashApp {
         control: DeviceControl,
         confirm: bool,
     ) {
+        let supported = self.application.supports(&FlashOperation::Control(control));
         if ui
             .add_enabled(
-                !self.application.is_active(),
+                supported && !self.application.is_active(),
                 egui::Button::new(RichText::new(label).color(if confirm {
                     theme::WARNING
                 } else {
@@ -247,6 +257,7 @@ impl RkFlashApp {
                     },
                 )),
             )
+            .on_disabled_hover_text(UNSUPPORTED_HINT)
             .clicked()
         {
             let operation = FlashOperation::Control(control);

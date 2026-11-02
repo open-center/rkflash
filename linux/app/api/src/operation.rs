@@ -41,6 +41,8 @@ pub enum FlashOperation {
     UpgradeFirmware {
         firmware: PathBuf,
         no_reset: bool,
+        /// 写入前选择的目标存储；upgrade_tool 自动识别存储，忽略该值。
+        storage: StorageType,
     },
     EraseFlash {
         firmware: PathBuf,

@@ -75,7 +75,7 @@ fn scan_devices(
         .args(scan.args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    configure_tool_process(&mut command, tool_path, tool_home_directory);
+    configure_tool_process(&mut command, tool_path, tool_home_directory, None);
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {

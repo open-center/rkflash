@@ -11,7 +11,7 @@ DIST := $(ROOT)/dist
 HOST_ARCH := $(shell uname -m)
 MAC_ARCH ?= $(if $(filter arm64 x86_64,$(HOST_ARCH)),$(HOST_ARCH),arm64)
 
-.PHONY: help version version-check set-version linux linux-check macos macos-check check clean
+.PHONY: help version version-check set-version linux linux-check macos macos-check windows check clean
 
 help:
 	@echo "rkflash $(VERSION)"
@@ -22,8 +22,10 @@ help:
 	@echo "  make linux-check          Linux 格式、架构、测试、Clippy"
 	@echo "  make macos                构建当前架构的 .dmg（MAC_ARCH=arm64|x86_64）"
 	@echo "  make macos-check          macOS 构建与单元测试"
+	@echo "  make windows              构建 Windows 安装程序与免安装 zip（MinGW、Rust、NSIS、7-Zip）"
+	@echo "                            交叉编译：make windows WIN_CROSS=x86_64-w64-mingw32-"
 	@echo "  make check                版本一致性 + 当前系统能跑的平台检查"
-	@echo "  make clean                清理两个平台的构建产物和 dist/"
+	@echo "  make clean                清理所有平台的构建产物和 dist/"
 
 version:
 	@echo $(VERSION)
@@ -53,6 +55,14 @@ macos: version-check
 macos-check:
 	$(MAKE) -C $(ROOT)/macos ARCH=$(MAC_ARCH) check
 
+WIN_CROSS ?=
+
+windows: version-check
+	$(MAKE) -C $(ROOT)/windows package CROSS=$(WIN_CROSS)
+	@mkdir -p $(DIST)
+	cp $(ROOT)/windows/build/dist/rkflash-$(VERSION)-windows-x64-setup.exe $(ROOT)/windows/build/dist/rkflash-$(VERSION)-windows-x64.zip $(DIST)/
+	@ls -l $(DIST)
+
 check: version-check
 ifeq ($(shell uname -s),Darwin)
 	$(MAKE) macos-check
@@ -63,4 +73,5 @@ endif
 clean:
 	rm -rf $(DIST)
 	$(MAKE) -C $(ROOT)/macos clean 2>/dev/null || true
+	$(MAKE) -C $(ROOT)/windows clean
 	cd $(ROOT)/linux && ./build.sh clean

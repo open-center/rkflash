@@ -3448,6 +3448,14 @@ int main(int argc, char* argv[])
 
 	strLogDir = szProgramDir;
 	strLogDir +=  "/log/";
+	{
+		/* rkflash: allow the GUI to place tool logs in its configured log directory */
+		const char *pLogDirEnv = getenv("RKDEVELOPTOOL_LOG_DIR");
+		if (pLogDirEnv && pLogDirEnv[0]) {
+			strLogDir = pLogDirEnv;
+			strLogDir += "/";
+		}
+	}
 	strConfigFile = szProgramDir;
 	strConfigFile += "/config.ini";
 	if (opendir(strLogDir.c_str()) == NULL)

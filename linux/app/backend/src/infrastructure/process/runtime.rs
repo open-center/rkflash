@@ -13,9 +13,12 @@ use super::terminal::sanitize_terminal_text;
 use crate::application::{
     DeviceMonitor, OperationExecutor, OperationLog, ToolLocator, ToolProtocol,
 };
-use crate::domain::{DeviceSnapshot, ExecutionEvent, ExecutionPlan};
-use std::io::{BufRead, BufReader, Read};
-use std::path::PathBuf;
+use crate::domain::{
+    CommandSpec, DeviceSnapshot, ExecutionEvent, ExecutionPlan, ToolOutcome, ToolSession, Workflow,
+};
+use std::ffi::OsString;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard, TryLockError};
@@ -69,6 +72,7 @@ struct RunContext {
     command_gate: Arc<Mutex<()>>,
     protocol: Arc<dyn ToolProtocol>,
     tool_home_directory: PathBuf,
+    tool_log_directory: PathBuf,
     operation_log_state: Arc<Mutex<OperationLogState>>,
 }
 
@@ -213,7 +217,7 @@ impl OperationExecutor for ProcessRuntime {
     }
 
     fn start(&self, plan: ExecutionPlan) -> Result<(), String> {
-        if plan.commands.is_empty() {
+        if plan.is_empty() {
             return Err("任务中没有可执行命令".to_owned());
         }
         if self
@@ -238,6 +242,7 @@ impl OperationExecutor for ProcessRuntime {
             command_gate: Arc::clone(&self.command_gate),
             protocol: Arc::clone(&self.protocol),
             tool_home_directory: self.tool_home_directory.clone(),
+            tool_log_directory: self.tool_log_directory(),
             operation_log_state: Arc::clone(&self.operation_log_state),
         };
 
@@ -283,6 +288,7 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
         command_gate,
         protocol,
         tool_home_directory,
+        tool_log_directory,
         operation_log_state,
     } = context;
     let Ok(_command_guard) = command_gate.lock() else {
@@ -295,119 +301,27 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
         });
         return;
     };
-    let total = plan.commands.len();
+    let runner = StepRunner {
+        tool_path: &tool_path,
+        tool_home_directory: &tool_home_directory,
+        tool_log_directory: &tool_log_directory,
+        tx: &tx,
+        cancelled: &cancelled,
+        child_slot: &child_slot,
+        protocol: &protocol,
+        progress_range: Arc::new(Mutex::new((0.0, 1.0))),
+    };
     let task_name = plan.name.clone();
-    let _ = tx.send(ExecutionEvent::TaskStarted {
-        name: task_name.clone(),
-        steps: total,
-    });
-
-    let mut success = true;
-    let mut cancelled_by_user = false;
-    let mut final_message = "操作完成".to_owned();
-
-    for (index, command) in plan.commands.into_iter().enumerate() {
-        if cancelled.load(Ordering::Acquire) {
-            success = false;
-            cancelled_by_user = true;
-            final_message = "操作已由用户中止".to_owned();
-            break;
-        }
-
-        let display = format_command(&tool_path, &command.args);
-        let _ = tx.send(ExecutionEvent::StepStarted {
-            index: index + 1,
-            total,
-            label: command.label.clone(),
-            command: display,
-        });
-
-        let mut process = Command::new(&tool_path);
-        process
-            .args(&command.args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        configure_tool_process(&mut process, &tool_path, &tool_home_directory);
-        let mut child = match process.spawn() {
-            Ok(child) => child,
-            Err(error) => {
-                success = false;
-                final_message = format!("无法启动外部工具：{error}");
-                break;
-            }
-        };
-
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
-        *lock_or_recover(&child_slot) = Some(child);
-
-        let stdout_reader = stdout.map(|stream| {
-            spawn_output_reader(
-                stream,
-                false,
-                index,
-                total,
-                tx.clone(),
-                Arc::clone(&protocol),
-            )
-        });
-        let stderr_reader = stderr.map(|stream| {
-            spawn_output_reader(
-                stream,
-                true,
-                index,
-                total,
-                tx.clone(),
-                Arc::clone(&protocol),
-            )
-        });
-
-        let exit_status = loop {
-            if cancelled.load(Ordering::Acquire) {
-                if let Some(child) = lock_or_recover(&child_slot).as_mut() {
-                    terminate_tool_process(child);
-                }
-            }
-
-            let status = lock_or_recover(&child_slot)
-                .as_mut()
-                .ok_or("子进程状态丢失")
-                .and_then(|child| child.try_wait().map_err(|_| "无法读取子进程状态"));
-            match status {
-                Ok(Some(status)) => break Some(status),
-                Ok(None) => thread::sleep(Duration::from_millis(60)),
-                Err(error) => {
-                    success = false;
-                    final_message = error.to_owned();
-                    break None;
-                }
-            }
-        };
-
-        let stdout_failure = join_output_reader(stdout_reader);
-        let stderr_failure = join_output_reader(stderr_reader);
-        *lock_or_recover(&child_slot) = None;
-
-        if cancelled.load(Ordering::Acquire) {
-            success = false;
-            cancelled_by_user = true;
-            final_message = "操作已由用户中止".to_owned();
-            break;
-        }
-        if let Some(failure) = stdout_failure.or(stderr_failure) {
-            success = false;
-            final_message = format!("步骤“{}”失败：{failure}", command.label);
-            break;
-        }
-        if !exit_status.is_some_and(|status| status.success()) {
-            if success {
-                success = false;
-                final_message = format!("步骤“{}”执行失败", command.label);
-            }
-            break;
-        }
-        let _ = tx.send(ExecutionEvent::Progress((index + 1) as f32 / total as f32));
-    }
+    let result = match plan.workflow {
+        Some(workflow) => run_workflow(&runner, &task_name, workflow),
+        None => run_commands(&runner, &task_name, plan.commands),
+    };
+    let cancelled_by_user = cancelled.load(Ordering::Acquire);
+    let (success, final_message) = match result {
+        Ok(message) => (true, message),
+        Err(_) if cancelled_by_user => (false, "操作已由用户中止".to_owned()),
+        Err(message) => (false, message),
+    };
 
     // 在发送 TaskFinished 之前由后端关闭日志：前端可能在收到事件后立即开始
     // 下一个任务，届时不应误关新任务的日志。
@@ -416,60 +330,300 @@ fn run_plan(tool_path: PathBuf, plan: ExecutionPlan, context: RunContext) {
     let _ = tx.send(ExecutionEvent::TaskFinished {
         name: task_name,
         success,
-        cancelled: cancelled_by_user,
+        cancelled: cancelled_by_user && !success,
         message: final_message,
     });
 }
 
-fn join_output_reader(reader: Option<thread::JoinHandle<Option<String>>>) -> Option<String> {
-    match reader?.join() {
-        Ok(failure) => failure,
-        Err(_) => Some("工具输出读取线程异常终止".to_owned()),
+fn run_commands(
+    runner: &StepRunner<'_>,
+    task_name: &str,
+    commands: Vec<CommandSpec>,
+) -> Result<String, String> {
+    let total = commands.len();
+    let _ = runner.tx.send(ExecutionEvent::TaskStarted {
+        name: task_name.to_owned(),
+        steps: total,
+    });
+    for (index, command) in commands.into_iter().enumerate() {
+        runner.set_progress_range(
+            index as f32 / total as f32,
+            (index + 1) as f32 / total as f32,
+        );
+        runner.announce(index + 1, total, &command.label, &command.args);
+        runner
+            .execute(&command.args, true)?
+            .require(&command.label)?;
+        let _ = runner
+            .tx
+            .send(ExecutionEvent::Progress((index + 1) as f32 / total as f32));
+    }
+    Ok("操作完成".to_owned())
+}
+
+fn run_workflow(
+    runner: &StepRunner<'_>,
+    task_name: &str,
+    workflow: Box<dyn Workflow>,
+) -> Result<String, String> {
+    let estimated = workflow.estimated_steps().max(1);
+    let _ = runner.tx.send(ExecutionEvent::TaskStarted {
+        name: task_name.to_owned(),
+        steps: estimated,
+    });
+    let mut session = WorkflowSession {
+        runner,
+        step: 0,
+        estimated,
+    };
+    workflow.run(&mut session)
+}
+
+/// 单次外部工具调用：启动、转发输出、等待退出，并响应用户中止。
+struct StepRunner<'a> {
+    tool_path: &'a Path,
+    tool_home_directory: &'a Path,
+    tool_log_directory: &'a Path,
+    tx: &'a mpsc::Sender<ExecutionEvent>,
+    cancelled: &'a AtomicBool,
+    child_slot: &'a Mutex<Option<Child>>,
+    protocol: &'a Arc<dyn ToolProtocol>,
+    /// 工具自身 0–100% 的进度映射到整体进度的区间。
+    progress_range: Arc<Mutex<(f32, f32)>>,
+}
+
+impl StepRunner<'_> {
+    fn set_progress_range(&self, start: f32, end: f32) {
+        *lock_or_recover(&self.progress_range) = (start, end);
+    }
+
+    fn announce(&self, index: usize, total: usize, label: &str, args: &[OsString]) {
+        let _ = self.tx.send(ExecutionEvent::StepStarted {
+            index,
+            total,
+            label: label.to_owned(),
+            command: format_command(self.tool_path, args),
+        });
+    }
+
+    fn execute(&self, args: &[OsString], echo: bool) -> Result<ToolOutcome, String> {
+        if self.cancelled.load(Ordering::Acquire) {
+            return Err("操作已由用户中止".to_owned());
+        }
+        let mut process = Command::new(self.tool_path);
+        process
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        configure_tool_process(
+            &mut process,
+            self.tool_path,
+            self.tool_home_directory,
+            Some(self.tool_log_directory),
+        );
+        let mut child = process
+            .spawn()
+            .map_err(|error| format!("无法启动外部工具：{error}"))?;
+
+        let reader = |stream: Option<Box<dyn Read + Send>>, stderr: bool| {
+            stream.map(|stream| {
+                spawn_output_reader(
+                    stream,
+                    OutputSink {
+                        stderr,
+                        echo,
+                        tx: self.tx.clone(),
+                        protocol: Arc::clone(self.protocol),
+                        progress_range: Arc::clone(&self.progress_range),
+                    },
+                )
+            })
+        };
+        let stdout_reader = reader(
+            child
+                .stdout
+                .take()
+                .map(|stream| Box::new(stream) as Box<dyn Read + Send>),
+            false,
+        );
+        let stderr_reader = reader(
+            child
+                .stderr
+                .take()
+                .map(|stream| Box::new(stream) as Box<dyn Read + Send>),
+            true,
+        );
+        *lock_or_recover(self.child_slot) = Some(child);
+
+        let exit_status = loop {
+            if self.cancelled.load(Ordering::Acquire) {
+                if let Some(child) = lock_or_recover(self.child_slot).as_mut() {
+                    terminate_tool_process(child);
+                }
+            }
+            let status = lock_or_recover(self.child_slot)
+                .as_mut()
+                .ok_or("子进程状态丢失")
+                .and_then(|child| child.try_wait().map_err(|_| "无法读取子进程状态"));
+            match status {
+                Ok(Some(status)) => break Ok(status),
+                Ok(None) => thread::sleep(Duration::from_millis(60)),
+                Err(error) => break Err(error.to_owned()),
+            }
+        };
+
+        let (stdout_failure, stdout_text) = join_output_reader(stdout_reader);
+        let (stderr_failure, stderr_text) = join_output_reader(stderr_reader);
+        *lock_or_recover(self.child_slot) = None;
+        if self.cancelled.load(Ordering::Acquire) {
+            return Err("操作已由用户中止".to_owned());
+        }
+        let exit_status = exit_status?;
+        Ok(ToolOutcome {
+            success: exit_status.success(),
+            failure: stdout_failure.or(stderr_failure),
+            output: stdout_text + &stderr_text,
+        })
     }
 }
 
-fn spawn_output_reader<R: Read + Send + 'static>(
-    stream: R,
+struct WorkflowSession<'a, 'b> {
+    runner: &'a StepRunner<'b>,
+    step: usize,
+    estimated: usize,
+}
+
+impl ToolSession for WorkflowSession<'_, '_> {
+    fn run(&mut self, label: &str, args: &[OsString]) -> Result<ToolOutcome, String> {
+        self.step += 1;
+        self.estimated = self.estimated.max(self.step);
+        self.runner.announce(self.step, self.estimated, label, args);
+        self.runner.execute(args, true)
+    }
+
+    fn probe(&mut self, args: &[OsString]) -> Result<ToolOutcome, String> {
+        self.runner.execute(args, false)
+    }
+
+    fn status(&mut self, text: &str) {
+        let _ = self.runner.tx.send(ExecutionEvent::Output {
+            text: text.to_owned(),
+            stderr: false,
+        });
+    }
+
+    fn progress_range(&mut self, start: f32, end: f32) {
+        self.runner.set_progress_range(start, end);
+    }
+
+    fn progress(&mut self, value: f32) {
+        let _ = self
+            .runner
+            .tx
+            .send(ExecutionEvent::Progress(value.clamp(0.0, 1.0)));
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.runner.cancelled.load(Ordering::Acquire)
+    }
+}
+
+fn join_output_reader(
+    reader: Option<thread::JoinHandle<(Option<String>, String)>>,
+) -> (Option<String>, String) {
+    match reader {
+        None => (None, String::new()),
+        Some(reader) => reader
+            .join()
+            .unwrap_or_else(|_| (Some("工具输出读取线程异常终止".to_owned()), String::new())),
+    }
+}
+
+struct OutputSink {
     stderr: bool,
-    step_index: usize,
-    step_count: usize,
+    /// 为 false 时只收集输出用于判断，不进入任务日志（例如轮询设备模式）。
+    echo: bool,
     tx: mpsc::Sender<ExecutionEvent>,
     protocol: Arc<dyn ToolProtocol>,
-) -> thread::JoinHandle<Option<String>> {
+    progress_range: Arc<Mutex<(f32, f32)>>,
+}
+
+impl OutputSink {
+    /// 处理一行输出，返回识别到的失败信息。
+    fn line(&self, raw: &[u8], captured: &mut String) -> Option<String> {
+        let line = sanitize_terminal_text(&String::from_utf8_lossy(raw));
+        if line.is_empty() {
+            return None;
+        }
+        captured.push_str(&line);
+        captured.push('\n');
+        if !self.echo {
+            return self.protocol.parse_failure(&line);
+        }
+        if let Some(progress) = self.protocol.parse_progress(&line) {
+            let (start, end) = *lock_or_recover(&self.progress_range);
+            let _ = self
+                .tx
+                .send(ExecutionEvent::Progress(start + (end - start) * progress));
+        }
+        let failure = self.protocol.parse_failure(&line);
+        if !self.protocol.is_transient(&line) {
+            let _ = self.tx.send(ExecutionEvent::Output {
+                text: line,
+                stderr: self.stderr,
+            });
+        }
+        failure
+    }
+}
+
+/// 按 `\n` 和 `\r` 切分输出：工具用回车原地刷新的进度也能实时显示。
+fn spawn_output_reader(
+    mut stream: Box<dyn Read + Send>,
+    sink: OutputSink,
+) -> thread::JoinHandle<(Option<String>, String)> {
     thread::spawn(move || {
         let mut failure = None;
-        for line in BufReader::new(stream).lines() {
-            let line = match line {
-                Ok(line) => line,
+        let mut captured = String::new();
+        let mut pending = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let count = match stream.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(error) => {
-                    if failure.is_none() {
-                        failure = Some(format!("读取工具输出失败：{error}"));
-                    }
+                    failure.get_or_insert(format!("读取工具输出失败：{error}"));
                     break;
                 }
             };
-            let line = sanitize_terminal_text(&line);
-            if line.is_empty() {
-                continue;
+            for &byte in &buffer[..count] {
+                if byte == b'\n' || byte == b'\r' {
+                    let found = sink.line(&pending, &mut captured);
+                    if failure.is_none() {
+                        failure = found;
+                    }
+                    pending.clear();
+                } else {
+                    pending.push(byte);
+                }
             }
-            if let Some(progress) = protocol.parse_progress(&line) {
-                let overall = (step_index as f32 + progress) / step_count as f32;
-                let _ = tx.send(ExecutionEvent::Progress(overall));
-            }
-            if failure.is_none() {
-                failure = protocol.parse_failure(&line);
-            }
-            let _ = tx.send(ExecutionEvent::Output { text: line, stderr });
         }
-        failure
+        if !pending.is_empty() {
+            let found = sink.line(&pending, &mut captured);
+            if failure.is_none() {
+                failure = found;
+            }
+        }
+        (failure, captured)
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        configure_tool_process, prepare_log_redirect, resolve_tool_log_directory, run_plan,
-        runtime_tool_home_directory, sanitize_terminal_text, ProcessRuntime, RunContext,
+        prepare_log_redirect, resolve_tool_log_directory, run_plan, runtime_tool_home_directory,
+        sanitize_terminal_text, ProcessRuntime, RunContext,
     };
     use crate::application::{OperationLog, ToolProtocol};
     use crate::domain::{CommandSpec, DeviceSnapshot, ExecutionEvent, ExecutionPlan};
@@ -479,13 +633,17 @@ mod tests {
 
     struct TestProtocol;
 
+    #[cfg(unix)]
     #[test]
     fn configures_external_tool_home_without_changing_its_working_directory_contract() {
+        use super::configure_tool_process;
+
         let mut command = std::process::Command::new("/opt/rkflash/tool");
         configure_tool_process(
             &mut command,
             std::path::Path::new("/opt/rkflash/tool"),
             std::path::Path::new("/tmp/rkflash-dev"),
+            None,
         );
 
         assert_eq!(
@@ -545,6 +703,7 @@ mod tests {
             command_gate: Arc::new(Mutex::new(())),
             protocol: Arc::new(TestProtocol),
             tool_home_directory: PathBuf::from("/tmp/rkflash-test-home"),
+            tool_log_directory: PathBuf::from("/tmp/rkflash-test-log"),
             operation_log_state: Arc::new(Mutex::new(Default::default())),
         };
         let plan = ExecutionPlan::single(

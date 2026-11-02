@@ -6,4 +6,6 @@ mod rockchip;
 
 pub(crate) use persistence::{JsonConfigurationRepository, LocalFileSystem};
 pub(crate) use process::ProcessRuntime;
-pub(crate) use rockchip::{discover_upgrade_tool, UpgradeToolAdapter};
+pub(crate) use rockchip::{
+    discover_rkdeveloptool, discover_upgrade_tool, RkDevelopToolAdapter, UpgradeToolAdapter,
+};

@@ -11,3 +11,7 @@ eframe.workspace = true
 image.workspace = true
 rfd.workspace = true
 rkflash-api.workspace = true
+
+# Windows 额外启用 wgpu 渲染器：没有 OpenGL 2+ 的虚拟机、远程桌面也能通过 Direct3D/WARP 显示界面。
+[target.'cfg(windows)'.dependencies]
+eframe = { workspace = true, features = ["wgpu"] }
