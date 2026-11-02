@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleExecutable</key>
-    <string>RKFlashMac</string>
+    <string>RKFlash</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>cn.roboticscenter.RKFlashMac</string>
+    <string>cn.roboticscenter.RKFlash</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>RKFlashMac</string>
+    <string>RKFlash</string>
     <key>CFBundleDisplayName</key>
-    <string>RK 原生烧录工具</string>
+    <string>RKFlash</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

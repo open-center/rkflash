@@ -481,22 +481,22 @@ mod tests {
 
     #[test]
     fn configures_external_tool_home_without_changing_its_working_directory_contract() {
-        let mut command = std::process::Command::new("/opt/rktools/tool");
+        let mut command = std::process::Command::new("/opt/rkflash/tool");
         configure_tool_process(
             &mut command,
-            std::path::Path::new("/opt/rktools/tool"),
-            std::path::Path::new("/tmp/rktools-dev"),
+            std::path::Path::new("/opt/rkflash/tool"),
+            std::path::Path::new("/tmp/rkflash-dev"),
         );
 
         assert_eq!(
             command.get_current_dir(),
-            Some(std::path::Path::new("/opt/rktools"))
+            Some(std::path::Path::new("/opt/rkflash"))
         );
         let home = command
             .get_envs()
             .find(|(name, _)| *name == "HOME")
             .and_then(|(_, value)| value);
-        assert_eq!(home, Some(std::ffi::OsStr::new("/tmp/rktools-dev")));
+        assert_eq!(home, Some(std::ffi::OsStr::new("/tmp/rkflash-dev")));
     }
 
     #[test]
@@ -544,7 +544,7 @@ mod tests {
             child_slot: Arc::new(Mutex::new(None)),
             command_gate: Arc::new(Mutex::new(())),
             protocol: Arc::new(TestProtocol),
-            tool_home_directory: PathBuf::from("/tmp/rktools-test-home"),
+            tool_home_directory: PathBuf::from("/tmp/rkflash-test-home"),
             operation_log_state: Arc::new(Mutex::new(Default::default())),
         };
         let plan = ExecutionPlan::single(
@@ -580,12 +580,12 @@ mod tests {
     #[test]
     fn resolves_explicit_or_temporary_tool_log_directory() {
         assert_eq!(
-            resolve_tool_log_directory(Some("/tmp/rktools-dev".into()), PathBuf::from("/tmp")),
-            PathBuf::from("/tmp/rktools-dev")
+            resolve_tool_log_directory(Some("/tmp/rkflash-dev".into()), PathBuf::from("/tmp")),
+            PathBuf::from("/tmp/rkflash-dev")
         );
         assert_eq!(
             resolve_tool_log_directory(None, PathBuf::from("/tmp")),
-            PathBuf::from("/tmp/rktools/log")
+            PathBuf::from("/tmp/rkflash/log")
         );
     }
 

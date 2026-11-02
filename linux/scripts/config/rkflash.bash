@@ -1,24 +1,25 @@
-# rktools/Rockchip 特殊配置与钩子。通用出包流程不得直接感知这些细节。
+# rkflash/Rockchip 特殊配置与钩子。通用出包流程不得直接感知这些细节。
 # shellcheck disable=SC2034
 
 project_configure() {
     local root_dir=$1
 
     PROJECT_DIR=$root_dir
-    PACKAGE_NAME=rktools
-    APPLICATION_PACKAGE=rktools
+    PACKAGE_NAME=rkflash
+    APPLICATION_PACKAGE=rkflash
     RUST_MINIMUM_VERSION=1.88
     # 只从 [workspace.package] 段取版本，避免文件前面出现其他 version 字段时误读。
     PACKAGE_VERSION=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version = "\([^"]*\)"/\1/p' \
         "$PROJECT_DIR/Cargo.toml" | head -n 1)
     PACKAGE_ARCHITECTURE=amd64
     PACKAGE_SECTION=devel
-    PACKAGE_MAINTAINER='rktools contributors <noreply@example.invalid>'
+    PACKAGE_MAINTAINER='rkflash contributors <noreply@example.invalid>'
     PACKAGE_DESCRIPTION='Rockchip USB flashing desktop utility'
     PACKAGE_DESCRIPTION_DETAIL=' A Linux desktop frontend compatible with Rockchip upgrade_tool workflows,
  including image download, firmware upgrade, device inspection and LBA tools.'
-    PACKAGE_CONFLICTS='rk-flash-studio'
-    PACKAGE_REPLACES='rk-flash-studio'
+    # rkflash 由 rktools 改名而来：安装时自动替换旧包，避免两个版本并存。
+    PACKAGE_CONFLICTS='rk-flash-studio, rktools'
+    PACKAGE_REPLACES='rk-flash-studio, rktools'
     # 带版本的 Provides 才能满足依赖方对 rk-flash-studio (>= x) 这类带版本约束。
     PACKAGE_PROVIDES="rk-flash-studio (= $PACKAGE_VERSION)"
     GLIBC_BASELINE=2.35
@@ -69,7 +70,7 @@ project_validate_sources() {
     (
         cd "$PROJECT_DIR" || packaging_die "无法进入项目目录：$PROJECT_DIR"
         if rg -ni \
-            'rktools|rockchip|upgrade_tool|rk-flash-studio|71-rktools|RKTOOLS_|22\.04|24\.04|26\.04' \
+            'rkflash|rockchip|upgrade_tool|rk-flash-studio|71-rkflash|RKFLASH_|22\.04|24\.04|26\.04' \
             scripts/lib; then
             packaging_die "通用脚本层包含项目名、平台特例或固定发行版版本"
         fi
@@ -114,19 +115,19 @@ project_validate_sources() {
             app/backend/src/application app/frontend/src
         packaging_assert_no_matches \
             "API 契约反向依赖了前端或后端实现" \
-            'rktools[_-](backend|frontend)|eframe|egui|rfd|libc' \
+            'rkflash[_-](backend|frontend)|eframe|egui|rfd|libc' \
             app/api
         packaging_assert_no_matches \
             "config crate 反向依赖了 API、后端或前端" \
-            'rktools[_-](api|backend|frontend)|eframe|egui|rfd|libc' \
+            'rkflash[_-](api|backend|frontend)|eframe|egui|rfd|libc' \
             app/config
         packaging_assert_no_matches \
             "backend crate 反向依赖了前端" \
-            'rktools[_-]frontend' \
+            'rkflash[_-]frontend' \
             app/backend
         packaging_assert_no_matches \
             "frontend crate 直接依赖了 backend 实现" \
-            'rktools[_-]backend' \
+            'rkflash[_-]backend' \
             app/frontend
         packaging_assert_no_matches \
             "app crate 包含了业务、设备或界面实现" \
@@ -169,14 +170,15 @@ project_stage_payload() {
         "$stage_dir/usr/bin/$PACKAGE_NAME"
     install -D -m 0755 "$UPGRADE_TOOL" \
         "$stage_dir/usr/lib/$PACKAGE_NAME/upgrade_tool"
-    install -D -m 0644 "$PROJECT_DIR/packaging/71-rktools.rules" \
-        "$stage_dir/usr/lib/udev/rules.d/71-rktools.rules"
-    install -D -m 0644 "$PROJECT_DIR/packaging/rktools.desktop" \
-        "$stage_dir/usr/share/applications/rktools.desktop"
-    install -D -m 0644 "$PROJECT_DIR/packaging/rktools.svg" \
-        "$stage_dir/usr/share/icons/hicolor/scalable/apps/rktools.svg"
-    install -D -m 0644 "$PROJECT_DIR/packaging/rktools.png" \
-        "$stage_dir/usr/share/icons/hicolor/256x256/apps/rktools.png"
+    install -D -m 0644 "$PROJECT_DIR/packaging/71-rkflash.rules" \
+        "$stage_dir/usr/lib/udev/rules.d/71-rkflash.rules"
+    install -D -m 0644 "$PROJECT_DIR/packaging/rkflash.desktop" \
+        "$stage_dir/usr/share/applications/rkflash.desktop"
+    local icon_size
+    for icon_size in 48 64 128 256 512; do
+        install -D -m 0644 "$PROJECT_DIR/packaging/icons/rkflash-$icon_size.png" \
+            "$stage_dir/usr/share/icons/hicolor/${icon_size}x${icon_size}/apps/rkflash.png"
+    done
     install -D -m 0644 "$PROJECT_DIR/README.md" \
         "$stage_dir/usr/share/doc/$PACKAGE_NAME/README.md"
     install -D -m 0644 "$PROJECT_DIR/packaging/THIRD_PARTY.md" \
@@ -184,7 +186,7 @@ project_stage_payload() {
     install -D -m 0644 "$PROJECT_DIR/LICENSE" \
         "$stage_dir/usr/share/doc/$PACKAGE_NAME/copyright"
     strip "$stage_dir/usr/bin/$PACKAGE_NAME"
-    desktop-file-validate "$stage_dir/usr/share/applications/rktools.desktop"
+    desktop-file-validate "$stage_dir/usr/share/applications/rkflash.desktop"
 }
 
 project_stage_maintainer_scripts() {

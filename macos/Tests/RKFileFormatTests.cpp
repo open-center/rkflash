@@ -8,7 +8,7 @@
 
 int main()
 {
-    const auto root = std::filesystem::temp_directory_path() / "RKFlashMac-file-format-tests";
+    const auto root = std::filesystem::temp_directory_path() / "RKFlash-file-format-tests";
     std::filesystem::remove_all(root);
     const auto misleadingDirectory = root / "release.img-unpacked";
     std::filesystem::create_directories(misleadingDirectory);

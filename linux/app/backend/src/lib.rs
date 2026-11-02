@@ -1,4 +1,4 @@
-//! RKTools 后端：应用用例、设备领域状态和 Rockchip 基础设施适配器。
+//! RKFlash 后端：应用用例、设备领域状态和 Rockchip 基础设施适配器。
 
 mod application;
 pub mod domain;
@@ -17,7 +17,7 @@ pub use domain::{
     DeviceControl, DeviceInfo, DeviceQuery, DeviceSnapshot, ExecutionEvent, FlashOperation,
     StorageType,
 };
-pub use rktools_api::{
+pub use rkflash_api::{
     ApplicationUpdate, FlashService, ImageEntry, WorkspaceConfig, WORKSPACE_FORMAT_VERSION,
 };
 

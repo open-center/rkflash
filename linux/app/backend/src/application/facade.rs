@@ -5,7 +5,7 @@ use super::{
     FileSystem, FlashPlanner, FlashProfile, OperationExecutor, OperationLog, ToolLocator,
     WorkspaceRepository,
 };
-use rktools_api::{
+use rkflash_api::{
     ApplicationUpdate, DeviceSnapshot, FlashOperation, FlashService, ImageEntry, WorkspaceConfig,
     WORKSPACE_FORMAT_VERSION,
 };

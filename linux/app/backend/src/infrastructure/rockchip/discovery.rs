@@ -23,7 +23,7 @@ pub(crate) fn discover_upgrade_tool() -> Option<PathBuf> {
         candidates.push(directory.join("tools").join(TOOL_FILE_NAME));
         candidates.push(directory.join(TOOL_FILE_NAME));
     }
-    candidates.push(PathBuf::from("/usr/lib/rktools/upgrade_tool"));
+    candidates.push(PathBuf::from("/usr/lib/rkflash/upgrade_tool"));
     if let Some(path) = env::var_os("PATH") {
         candidates.extend(env::split_paths(&path).map(|directory| directory.join(TOOL_FILE_NAME)));
     }

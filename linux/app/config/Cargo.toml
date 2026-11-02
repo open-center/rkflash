@@ -1,10 +1,10 @@
 [package]
-name = "rktools-config"
+name = "rkflash-config"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "RKTools workspace configuration model and JSON codec"
+description = "RKFlash workspace configuration model and JSON codec"
 
 [dependencies]
 serde.workspace = true

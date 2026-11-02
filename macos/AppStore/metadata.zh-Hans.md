@@ -1,6 +1,6 @@
 # 简体中文商店资料草案
 
-- 名称：RK 原生烧录工具
+- 名称：RKFlash（RK 固件烧录）
 - 副标题：Rockchip USB 原生烧录
 - 主要分类：开发者工具
 - 关键词：Rockchip,固件,烧录,开发板,Maskrom,Loader,USB
@@ -11,7 +11,7 @@
 
 ## 描述
 
-RK 原生烧录工具是一款面向 Rockchip 开发板的 macOS USB 固件烧录应用。
+RKFlash（RK 固件烧录）是一款面向 Rockchip 开发板的 macOS USB 固件烧录应用。
 
 主要功能：
 

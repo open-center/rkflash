@@ -14,16 +14,16 @@ fi
 # 单一组合入口：这里只装配命令，具体实现位于 scripts/lib 与 scripts/config。
 # shellcheck source=scripts/lib/common.bash
 source "$SCRIPTS_DIR/lib/common.bash"
-# shellcheck source=scripts/config/rktools.bash
-source "$SCRIPTS_DIR/config/rktools.bash"
-# shellcheck source=scripts/config/rktools-delivery.bash
-source "$SCRIPTS_DIR/config/rktools-delivery.bash"
+# shellcheck source=scripts/config/rkflash.bash
+source "$SCRIPTS_DIR/config/rkflash.bash"
+# shellcheck source=scripts/config/rkflash-delivery.bash
+source "$SCRIPTS_DIR/config/rkflash-delivery.bash"
 # shellcheck source=scripts/lib/rust.bash
 source "$SCRIPTS_DIR/lib/rust.bash"
 # shellcheck source=scripts/lib/debian.bash
 source "$SCRIPTS_DIR/lib/debian.bash"
 
-[[ -f "$PROJECT_DIR/Cargo.toml" ]] || packaging_die "必须在 rktools 源码目录中执行"
+[[ -f "$PROJECT_DIR/Cargo.toml" ]] || packaging_die "必须在 rkflash 源码目录中执行"
 cd "$PROJECT_DIR"
 project_configure "$PROJECT_DIR"
 project_delivery_configure "$PROJECT_DIR"

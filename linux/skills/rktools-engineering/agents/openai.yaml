@@ -1,4 +1,0 @@
-interface:
-  display_name: "RKTools 工程模式"
-  short_description: "四 crate workspace、完整后端分层与安全交付"
-  default_prompt: "使用 $rktools-engineering，按四 crate workspace、端口适配器解耦、设备安全语义和单一权威路径完成这项 rktools 改动。"

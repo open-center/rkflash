@@ -1,6 +1,6 @@
 //! parameter 分区与同目录镜像的纯匹配规则。
 
-use rktools_config::ImageEntry;
+use rkflash_config::ImageEntry;
 use std::path::{Path, PathBuf};
 
 pub(super) fn resolve_image_paths(
@@ -52,7 +52,7 @@ pub(super) fn resolve_image_paths(
 #[cfg(test)]
 mod tests {
     use super::resolve_image_paths;
-    use rktools_config::ImageEntry;
+    use rkflash_config::ImageEntry;
     use std::path::{Path, PathBuf};
 
     #[test]

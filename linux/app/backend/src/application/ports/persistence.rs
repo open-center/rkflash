@@ -1,4 +1,4 @@
-use rktools_config::WorkspaceConfig;
+use rkflash_config::WorkspaceConfig;
 use std::path::{Path, PathBuf};
 
 pub(crate) trait WorkspaceRepository {

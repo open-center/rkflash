@@ -1,12 +1,12 @@
 [package]
-name = "rktools"
+name = "rkflash"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 description = "Rockchip USB flashing desktop utility"
-default-run = "rktools"
+default-run = "rkflash"
 
 [dependencies]
-rktools-backend.workspace = true
-rktools-frontend.workspace = true
+rkflash-backend.workspace = true
+rkflash-frontend.workspace = true

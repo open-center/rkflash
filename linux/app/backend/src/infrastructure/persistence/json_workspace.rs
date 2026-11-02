@@ -1,5 +1,5 @@
 use crate::application::WorkspaceRepository;
-use rktools_config::{decode_workspace, encode_workspace, WorkspaceConfig};
+use rkflash_config::{decode_workspace, encode_workspace, WorkspaceConfig};
 use std::fs;
 use std::path::Path;
 

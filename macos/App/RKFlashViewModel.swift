@@ -28,7 +28,7 @@ final class RKFlashViewModel: ObservableObject {
     @Published private(set) var isBusy = false
     @Published private(set) var lastError: String?
 
-    private let worker = DispatchQueue(label: "cn.roboticscenter.RKFlashMac.worker", qos: .userInitiated)
+    private let worker = DispatchQueue(label: "cn.roboticscenter.RKFlash.worker", qos: .userInitiated)
     private let stateLock = NSLock()
     private var activeProcess: Process?
     private var cancellationRequested = false
@@ -770,7 +770,7 @@ final class RKFlashViewModel: ObservableObject {
 
         if executable.lastPathComponent == "rkdeveloptool",
            let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let workingDirectory = applicationSupport.appendingPathComponent("RKFlashMac", isDirectory: true)
+            let workingDirectory = applicationSupport.appendingPathComponent("RKFlash", isDirectory: true)
             try? FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
             process.currentDirectoryURL = workingDirectory
         }
@@ -876,7 +876,7 @@ final class RKFlashViewModel: ObservableObject {
             throw RKFirmwareFormatError.extractionFailed("无法访问 Application Support")
         }
         let parent = applicationSupport
-            .appendingPathComponent("RKFlashMac", isDirectory: true)
+            .appendingPathComponent("RKFlash", isDirectory: true)
             .appendingPathComponent("FirmwareCache", isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         let sourceBase = URL(fileURLWithPath: info.sourcePath).lastPathComponent

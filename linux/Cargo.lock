@@ -2606,31 +2606,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "rktools"
+name = "rkflash"
 version = "0.4.0"
 dependencies = [
- "rktools-backend",
- "rktools-frontend",
+ "rkflash-backend",
+ "rkflash-frontend",
 ]
 
 [[package]]
-name = "rktools-api"
+name = "rkflash-api"
 version = "0.4.0"
 dependencies = [
- "rktools-config",
+ "rkflash-config",
 ]
 
 [[package]]
-name = "rktools-backend"
+name = "rkflash-backend"
 version = "0.4.0"
 dependencies = [
  "libc",
- "rktools-api",
- "rktools-config",
+ "rkflash-api",
+ "rkflash-config",
 ]
 
 [[package]]
-name = "rktools-config"
+name = "rkflash-config"
 version = "0.4.0"
 dependencies = [
  "serde",
@@ -2638,13 +2638,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "rktools-frontend"
+name = "rkflash-frontend"
 version = "0.4.0"
 dependencies = [
  "eframe",
  "image",
  "rfd",
- "rktools-api",
+ "rkflash-api",
 ]
 
 [[package]]

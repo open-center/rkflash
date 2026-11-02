@@ -1,13 +1,13 @@
 [package]
-name = "rktools-frontend"
+name = "rkflash-frontend"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "RKTools egui desktop frontend"
+description = "RKFlash egui desktop frontend"
 
 [dependencies]
 eframe.workspace = true
 image.workspace = true
 rfd.workspace = true
-rktools-api.workspace = true
+rkflash-api.workspace = true

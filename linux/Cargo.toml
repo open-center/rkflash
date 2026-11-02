@@ -22,10 +22,10 @@ libc = "0.2"
 rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rktools-api = { path = "app/api" }
-rktools-backend = { path = "app/backend" }
-rktools-config = { path = "app/config" }
-rktools-frontend = { path = "app/frontend" }
+rkflash-api = { path = "app/api" }
+rkflash-backend = { path = "app/backend" }
+rkflash-config = { path = "app/config" }
+rkflash-frontend = { path = "app/frontend" }
 
 [profile.release]
 lto = "thin"

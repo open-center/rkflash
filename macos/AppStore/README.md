@@ -4,7 +4,7 @@
 
 ## 当前技术状态
 
-- Bundle ID：`cn.roboticscenter.RKFlashMac`（注册 App ID 前仍可更改；上传第一个构建后不要再改）。
+- Bundle ID：`cn.roboticscenter.RKFlash`（注册 App ID 前仍可更改；上传第一个构建后不要再改）。
 - 最低系统：macOS 13。
 - 分类：Developer Tools。
 - 主应用沙盒权限：USB、用户选择文件读写。
@@ -30,7 +30,7 @@ make universal-check
 ## 上架前必须完成
 
 1. 在本机安装完整 Xcode，并在 Xcode 设置中登录已加入 Apple Developer Program 的账号。
-2. 确认 `cn.roboticscenter.RKFlashMac` 可注册到该团队；若不可用，在首次上传前统一修改 Bundle ID、辅助工具签名 ID 和文档。
+2. 确认 `cn.roboticscenter.RKFlash` 可注册到该团队；若不可用，在首次上传前统一修改 Bundle ID、辅助工具签名 ID 和文档。
 3. 创建 App Store Connect 应用记录，填写 SKU、主要语言、分类、年龄分级、内容权利和 DSA/地区合规信息。
 4. 使用 Xcode 自动签名，获得 Apple Distribution、Mac Installer Distribution 和 Mac App Store Connect 描述文件。
 5. 在 Intel 与 Apple Silicon 真机上运行沙盒构建，分别验证 Maskrom、Loader、固件读取、解包、写入、校验和重启。

@@ -1,4 +1,4 @@
-use rktools_api::FlashOperation;
+use rkflash_api::FlashOperation;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -126,7 +126,7 @@ impl DeviceMode {
             Self::Maskrom => DeviceModeGuidance {
                 title: "设备已进入 Maskrom 模式",
                 detail:
-                    "这是底层恢复模式。rktools 只显示当前状态，不会主动加载 Loader 或切换模式。",
+                    "这是底层恢复模式。RKFlash 只显示当前状态，不会主动加载 Loader 或切换模式。",
             },
             Self::Loader => DeviceModeGuidance {
                 title: "设备已进入 Loader 模式",

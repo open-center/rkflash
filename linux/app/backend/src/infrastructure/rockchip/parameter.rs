@@ -1,4 +1,4 @@
-use rktools_config::ImageEntry;
+use rkflash_config::ImageEntry;
 
 pub(super) fn parse_parameter(text: &str) -> Result<Vec<ImageEntry>, String> {
     let marker = "mtdparts=";

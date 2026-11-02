@@ -1,4 +1,4 @@
-//! RKTools 原生 egui 桌面交付层。
+//! RKFlash 原生 egui 桌面交付层。
 
 mod actions;
 mod chrome;
@@ -18,7 +18,7 @@ use components::{
 use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke};
 use file_dialog::{FileDialogSpec, FileDialogTarget};
 use layout::LayoutProfile;
-use rktools_api::{
+use rkflash_api::{
     ApplicationUpdate, DeviceControl, DeviceQuery, DeviceSnapshot, ExecutionEvent, FlashOperation,
     FlashService, ImageEntry, StorageType, WorkspaceConfig, WORKSPACE_FORMAT_VERSION,
 };
@@ -28,12 +28,14 @@ use std::time::{Duration, Instant};
 use view_model::{AppTab, DeviceMode, ErrorToast, LogEntry, LogLevel, OperationTip, PendingAction};
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-const APP_ID: &str = "rktools";
+const APP_ID: &str = "rkflash";
 
 fn app_icon() -> eframe::egui::IconData {
-    let image = image::load_from_memory(include_bytes!("../../../../packaging/rktools.png"))
-        .expect("embedded application icon must be a valid PNG")
-        .into_rgba8();
+    let image = image::load_from_memory(include_bytes!(
+        "../../../../packaging/icons/rkflash-256.png"
+    ))
+    .expect("embedded application icon must be a valid PNG")
+    .into_rgba8();
     let (width, height) = image.dimensions();
     eframe::egui::IconData {
         rgba: image.into_raw(),
@@ -45,10 +47,10 @@ fn app_icon() -> eframe::egui::IconData {
 pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            // Keep the Wayland app_id aligned with packaging/rktools.desktop so
+            // Keep the Wayland app_id aligned with packaging/rkflash.desktop so
             // GNOME can group the running window with its launcher icon.
             .with_app_id(APP_ID)
-            .with_title("rktools")
+            .with_title("RKFlash")
             .with_inner_size([1320.0, 860.0])
             .with_min_inner_size([960.0, 700.0])
             .with_icon(app_icon()),
@@ -56,11 +58,11 @@ pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
     };
 
     eframe::run_native(
-        "rktools",
+        "RKFlash",
         options,
         Box::new(move |context| Ok(Box::new(RkFlashApp::new(context, Box::new(application))))),
     )
-    .map_err(|error| format!("启动 rktools 图形界面失败：{error}"))
+    .map_err(|error| format!("启动 RKFlash 图形界面失败：{error}"))
 }
 
 pub struct RkFlashApp {
@@ -137,7 +139,7 @@ impl RkFlashApp {
             follow_logs: true,
             logs_expanded: true,
         };
-        app.push_log(LogLevel::Info, format!("rktools v{APP_VERSION} 已启动"));
+        app.push_log(LogLevel::Info, format!("RKFlash v{APP_VERSION} 已启动"));
         app.push_log(
             if tool_available {
                 LogLevel::Success
