@@ -6,7 +6,7 @@ project_configure() {
 
     PROJECT_DIR=$root_dir
     # Linux 打包专用文件（脚本、Dockerfile、deb 资源、upgrade_tool）所在目录。
-    PACKAGING_DIR="$PROJECT_DIR/packaging/linux"
+    PACKAGING_DIR="$PROJECT_DIR/platforms/linux/packaging"
     PACKAGE_NAME=rkflash
     APPLICATION_PACKAGE=rkflash
     RUST_MINIMUM_VERSION=1.88

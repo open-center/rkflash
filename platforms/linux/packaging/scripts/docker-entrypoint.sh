@@ -11,5 +11,5 @@ set -euo pipefail
 # remain editable on the host. Writable caches therefore live in the bind mount.
 mkdir -p -- "${HOME:?}" "${CARGO_HOME:?}" /workspace/output/target
 
-exec /workspace/packaging/linux/build.sh "$@"
+exec /workspace/platforms/linux/packaging/build.sh "$@"
 

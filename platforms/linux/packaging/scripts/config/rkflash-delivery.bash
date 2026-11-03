@@ -11,7 +11,7 @@ project_delivery_configure() {
     SUPPORTED_TARGETS="$DELIVERY_DISTRIBUTION_DISPLAY ${DELIVERY_TARGET_VERSIONS[*]}"
     DELIVERY_REQUESTED_VERSION=${RKFLASH_UBUNTU_VERSION:-$DELIVERY_BASELINE_VERSION}
     DELIVERY_DOCKER_PLATFORM=${RKFLASH_DOCKER_PLATFORM:-linux/amd64}
-    DELIVERY_DOCKERFILE="$root_dir/packaging/linux/Dockerfile"
+    DELIVERY_DOCKERFILE="$root_dir/platforms/linux/packaging/Dockerfile"
     DELIVERY_CONTAINER_WORKSPACE=/workspace
     DELIVERY_CONTAINER_HOME=/tmp/delivery-home
     DELIVERY_CARGO_HOME=/workspace/output/docker/cargo-home
