@@ -160,10 +160,29 @@ jobs:
       - name: WinUSB driver preinstalled
         shell: pwsh
         run: |
+          # 驱动库中应有一个覆盖 rockchip-pids.txt 全部 PID 的 INF。
           $drivers = pnputil /enum-drivers | Out-String
-          $found = [regex]::Matches($drivers, 'rockchip_[0-9a-f]{4}\.inf')
-          "驱动库中的 Rockchip WinUSB INF：$($found.Count) 个"
-          if ($found.Count -lt 1) { $drivers; throw '未找到预装的 Rockchip WinUSB 驱动' }
+          if ($drivers -notmatch 'rockchip_rockusb\.inf') { $drivers; throw '未找到预装的 Rockchip WinUSB 驱动' }
+          $expected = @(Get-Content (Join-Path $env:ProgramFiles 'RKFlash\driver\rockchip-pids.txt') |
+            Where-Object { $_ -match '^[0-9A-Fa-f]{4}$' }).Count
+          $inf = Get-ChildItem "$env:WINDIR\INF\oem*.inf" |
+            Where-Object { (Get-Content $_.FullName -Raw) -match 'Rockchip RockUSB' } | Select-Object -First 1
+          if (-not $inf) { throw '驱动库中找不到 Rockchip RockUSB INF' }
+          # 主 PID 写在 [Strings] 的 DeviceID 中，其余 PID 直接写在型号段。
+          $ids = [regex]::Matches((Get-Content $inf.FullName -Raw), 'VID_2207&PID_([0-9A-F]{4})') |
+            ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+          "$($inf.Name) 覆盖 $($ids.Count) 个 PID（期望 $expected）"
+          if ($ids.Count -ne $expected) { Get-Content $inf.FullName; throw 'INF 覆盖的 PID 数量不符' }
+
+      - name: Driver reinstall time
+        shell: pwsh
+        run: |
+          $script = Join-Path $env:ProgramFiles 'RKFlash\driver\install-driver.ps1'
+          $elapsed = Measure-Command {
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Quiet
+            if ($LASTEXITCODE -ne 0) { throw "install-driver.ps1 返回 $LASTEXITCODE" }
+          }
+          "驱动安装耗时 $([math]::Round($elapsed.TotalSeconds)) 秒"
 
       - name: GUI starts
         shell: pwsh

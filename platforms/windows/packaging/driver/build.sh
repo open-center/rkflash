@@ -48,6 +48,20 @@ SOURCE="$BUILD_DIR/libwdi-$LIBWDI_VERSION"
 rm -rf "$SOURCE" "$BUILD_DIR/wdk" "$BUILD_DIR/wdk-msi"
 tar -xzf "$BUILD_DIR/downloads/libwdi-$LIBWDI_VERSION.tar.gz" -C "$BUILD_DIR"
 
+# libwdi 的 INF 模板每次只写一个硬件 ID，逐个 PID 生成并签名驱动约需半分钟一次。
+# 这里把 rockchip-pids.txt 中除主 PID 外的其余 PID 写进模板，安装时一次即可覆盖全部芯片。
+ROCKCHIP_PIDS=$(grep -Eo '^[0-9A-Fa-f]{4}' "$HERE/rockchip-pids.txt" | tr 'a-f' 'A-F')
+pid_count=$(wc -w <<<"$ROCKCHIP_PIDS")
+(( pid_count > 0 )) || die "rockchip-pids.txt 中没有 PID"
+TEMPLATE="$SOURCE/libwdi/winusb.inf.in"
+# 模板为 CRLF 换行；在每个架构的 “USB\%DeviceID%” 行后追加其余 PID 的硬件 ID。
+EXTRA_PIDS=$(tail -n +2 <<<"$ROCKCHIP_PIDS") perl -0pi -e '
+    my $extra = join "", map { "%DeviceName% = USB_Install, USB\\VID_2207&PID_$_\r\n" } split /\s+/, $ENV{EXTRA_PIDS};
+    s/(%DeviceName% = USB_Install, USB\\%DeviceID%\r\n)/$1$extra/g;
+' "$TEMPLATE"
+actual=$(grep -c '^%DeviceName% = USB_Install' "$TEMPLATE")
+(( actual == 3 * pid_count )) || die "INF 模板修改失败：期望 $(( 3 * pid_count )) 行硬件 ID，实际 $actual 行"
+
 # MSI 内同名文件的 _00000 为 x86 版，_00001 为 x64 版；整理成 libwdi 期望的 WDK 目录结构。
 "$SEVEN_ZIP" x -y -o"$BUILD_DIR/wdk-msi" "$BUILD_DIR/downloads/wdfcoinstaller.msi" >/dev/null
 for arch in x86:00000 x64:00001; do
