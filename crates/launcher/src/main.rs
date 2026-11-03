@@ -8,7 +8,7 @@ use rkflash_platform_windows as platform;
 
 fn main() {
     let application = platform::create_application();
-    if let Err(error) = rkflash_frontend::desktop::run(application) {
+    if let Err(error) = rkflash_frontend::desktop::run(application, platform::desktop_profile()) {
         eprintln!("{error}");
         std::process::exit(1);
     }

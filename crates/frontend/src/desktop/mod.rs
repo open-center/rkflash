@@ -4,12 +4,15 @@ mod actions;
 mod chrome;
 mod components;
 mod file_dialog;
+mod font;
 mod layout;
 mod overlays;
 mod pages;
-mod platform;
+mod profile;
 mod theme;
 mod view_model;
+
+pub use profile::{show_error_dialog, DesktopProfile, Renderer};
 
 use components::{
     button_grid, card, danger_button, field, format_bytes, inset, metric, path_picker,
@@ -19,15 +22,20 @@ use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke};
 use file_dialog::{FileDialogSpec, FileDialogTarget};
 use layout::LayoutProfile;
 use rkflash_api::{
-    ApplicationUpdate, DeviceControl, DeviceQuery, DeviceSnapshot, ExecutionEvent, FlashOperation,
-    FlashService, ImageEntry, StorageType, WorkspaceConfig, WORKSPACE_FORMAT_VERSION,
+    DeviceControl, DeviceQuery, DeviceSnapshot, DownloadRequest, EraseFlashRequest, ExecutionEvent,
+    FirmwareUpgradeRequest, FlashService, ImageEntry, LbaEraseRequest, LbaReadRequest,
+    LbaWriteRequest, LoaderUpgradeRequest, SerialLogRequest, StorageType, ToolInfo,
+    WorkspaceConfig, WORKSPACE_FORMAT_VERSION,
 };
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
-use view_model::{AppTab, DeviceMode, ErrorToast, LogEntry, LogLevel, OperationTip, PendingAction};
+use view_model::{
+    AppTab, ConfirmedAction, DeviceMode, ErrorToast, LogEntry, LogLevel, OperationTip,
+    PendingAction,
+};
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_ID: &str = "rkflash";
@@ -44,20 +52,24 @@ fn app_icon() -> eframe::egui::IconData {
     }
 }
 
-pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
+pub fn run(
+    application: impl FlashService + 'static,
+    profile: DesktopProfile,
+) -> Result<(), String> {
     // 首选渲染器创建失败时（例如虚拟机或远程桌面没有可用的 OpenGL 2+），
     // 换下一个渲染器重试；应用对象只有在窗口真正创建后才会被取走。
     let slot: Rc<RefCell<Option<Box<dyn FlashService>>>> =
         Rc::new(RefCell::new(Some(Box::new(application))));
     let mut failures = Vec::new();
-    for &(renderer, label) in platform::RENDERERS {
+    let cjk_fonts = profile.cjk_fonts;
+    for &(renderer, label) in profile.renderers {
         let pending = Rc::clone(&slot);
         let result = eframe::run_native(
             "RKFlash",
             native_options(renderer),
             Box::new(move |context| {
                 let application = pending.borrow_mut().take().ok_or("界面已启动")?;
-                Ok(Box::new(RkFlashApp::new(context, application)))
+                Ok(Box::new(RkFlashApp::new(context, application, cjk_fonts)))
             }),
         );
         match result {
@@ -69,7 +81,7 @@ pub fn run(application: impl FlashService + 'static) -> Result<(), String> {
         }
     }
     let message = format!("启动 RKFlash 图形界面失败。{}", failures.join("；"));
-    platform::show_startup_error(&message);
+    (profile.show_startup_error)(&message);
     Err(message)
 }
 
@@ -89,7 +101,10 @@ fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
 }
 
 pub struct RkFlashApp {
+    /// 只允许 `actions/` 访问；页面与外壳经动作层调用后端。
     application: Box<dyn FlashService>,
+    /// 当前平台烧录工具的能力，启动时读取一次。
+    tool: ToolInfo,
     egui_ctx: egui::Context,
     file_dialogs: Vec<(FileDialogTarget, mpsc::Receiver<Option<PathBuf>>)>,
     tab: AppTab,
@@ -122,27 +137,24 @@ pub struct RkFlashApp {
 }
 
 impl RkFlashApp {
-    pub fn new(context: &eframe::CreationContext<'_>, application: Box<dyn FlashService>) -> Self {
-        let cjk_font_available = theme::install(&context.egui_ctx);
-        let tool_path = application.tool_path();
-        let tool_available = tool_path.is_some();
-        let tool_message = match tool_path {
-            Some(path) => format!("已找到工具：{}", path.display()),
-            None => format!("未找到 {}，请从右上角选择工具", application.tool_name()),
-        };
-        let tool_log_directory = application.tool_log_directory().display().to_string();
-
+    pub fn new(
+        context: &eframe::CreationContext<'_>,
+        application: Box<dyn FlashService>,
+        cjk_fonts: &[(&str, u32)],
+    ) -> Self {
+        let cjk_font_available = theme::install(&context.egui_ctx, cjk_fonts);
         let mut app = Self {
-            images: application.default_images(),
             application,
+            tool: ToolInfo::default(),
             egui_ctx: context.egui_ctx.clone(),
             file_dialogs: Vec::new(),
             tab: AppTab::Download,
+            images: Vec::new(),
             selected_image: None,
             firmware_path: String::new(),
             firmware_size_cache: None,
             loader_path: String::new(),
-            tool_log_directory,
+            tool_log_directory: String::new(),
             output_path: String::new(),
             lba_start: "0x00000000".to_owned(),
             lba_count: "0x00002000".to_owned(),
@@ -165,14 +177,8 @@ impl RkFlashApp {
             logs_expanded: true,
         };
         app.push_log(LogLevel::Info, format!("RKFlash v{APP_VERSION} 已启动"));
-        app.push_log(
-            if tool_available {
-                LogLevel::Success
-            } else {
-                LogLevel::Warning
-            },
-            tool_message,
-        );
+        app.load_tool_settings();
+        app.restore_default_images();
         if !cjk_font_available {
             app.push_log(
                 LogLevel::Warning,
@@ -180,101 +186,6 @@ impl RkFlashApp {
             );
         }
         app
-    }
-
-    fn process_application(&mut self) {
-        let ApplicationUpdate {
-            device_snapshot,
-            events,
-        } = self.application.poll();
-        if let Some(snapshot) = device_snapshot {
-            self.update_device_operation_tip(&snapshot);
-            self.device_snapshot = snapshot;
-        }
-
-        for event in events {
-            match event {
-                ExecutionEvent::TaskStarted { name, steps } => {
-                    self.progress = 0.0;
-                    self.status_text = format!("正在执行：{name}");
-                    if let Some(path) = self.application.operation_log_path() {
-                        self.push_log(LogLevel::Info, format!("操作日志：{}", path.display()));
-                    }
-                    self.push_log(LogLevel::Info, format!("开始{name}，共 {steps} 个步骤"));
-                }
-                ExecutionEvent::StepStarted {
-                    index,
-                    total,
-                    label,
-                    command,
-                } => {
-                    self.status_text = format!("[{index}/{total}] {label}");
-                    self.push_log(LogLevel::Command, format!("$ {command}"));
-                }
-                ExecutionEvent::Output { text, stderr } => {
-                    let lower = text.to_ascii_lowercase();
-                    let level = if stderr || lower.contains("fail") || lower.contains("error") {
-                        LogLevel::Error
-                    } else if lower.contains("success") || lower.ends_with(" ok.") {
-                        LogLevel::Success
-                    } else {
-                        LogLevel::Info
-                    };
-                    self.push_log(level, text);
-                }
-                ExecutionEvent::Progress(value) => self.progress = value,
-                ExecutionEvent::TaskFinished {
-                    name,
-                    success,
-                    cancelled,
-                    message,
-                } => {
-                    self.progress = if success { 1.0 } else { self.progress };
-                    self.status_text = if success {
-                        format!("{name}完成")
-                    } else if cancelled {
-                        format!("{name}已中止")
-                    } else {
-                        format!("{name}未完成")
-                    };
-                    let level = if success {
-                        LogLevel::Success
-                    } else if cancelled {
-                        LogLevel::Warning
-                    } else {
-                        LogLevel::Error
-                    };
-                    self.push_log(level, format!("{name}：{message}"));
-                    if !success && !cancelled {
-                        self.show_error_toast(format!("{name}失败"), message);
-                    }
-                }
-            }
-        }
-    }
-
-    fn push_log(&mut self, level: LogLevel, text: impl Into<String>) {
-        let text = text.into();
-        let persistence_result = self.application.append_operation_log(level.label(), &text);
-        let elapsed = self.session_started_at.elapsed();
-        self.logs.push(LogEntry {
-            level,
-            text,
-            elapsed,
-        });
-        if let Err(error) = persistence_result {
-            if self.log_persistence_error.as_deref() != Some(error.as_str()) {
-                self.logs.push(LogEntry {
-                    level: LogLevel::Error,
-                    text: format!("操作日志未能写入磁盘：{error}"),
-                    elapsed: self.session_started_at.elapsed(),
-                });
-                self.log_persistence_error = Some(error);
-            }
-        }
-        if self.logs.len() > 2_000 {
-            self.logs.drain(..500);
-        }
     }
 
     pub(super) fn report_error(&mut self, title: impl Into<String>, detail: impl Into<String>) {
@@ -288,58 +199,19 @@ impl RkFlashApp {
         self.error_toast = Some(ErrorToast::new(title, detail));
     }
 
-    fn update_device_operation_tip(&mut self, snapshot: &DeviceSnapshot) {
-        let mode = match snapshot.devices.as_slice() {
-            [device] => DeviceMode::from_label(&device.mode),
-            _ => None,
-        };
-        if mode == self.recognized_device_mode {
-            return;
-        }
-
-        self.operation_tip = mode.map(OperationTip::new);
-        self.recognized_device_mode = mode;
-    }
-
     fn current_device_mode(&self) -> Option<DeviceMode> {
         match self.device_snapshot.devices.as_slice() {
             [device] => DeviceMode::from_label(&device.mode),
             _ => None,
         }
     }
-
-    fn operation_log_display(&self) -> Option<(String, String)> {
-        self.application.operation_log_path().map(|path| {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.display().to_string());
-            (name, path.display().to_string())
-        })
-    }
-
-    /// 升级页每帧都要展示固件大小；按路径缓存结果，避免每帧一次磁盘 stat。
-    fn cached_firmware_size(&mut self) -> String {
-        let path = self.firmware_path.trim().to_owned();
-        if let Some((cached_path, size)) = &self.firmware_size_cache {
-            if *cached_path == path {
-                return size.clone();
-            }
-        }
-        let size = self
-            .application
-            .file_size(Path::new(&path))
-            .map(format_bytes)
-            .unwrap_or_else(|_| "—".to_owned());
-        self.firmware_size_cache = Some((path, size.clone()));
-        size
-    }
 }
 
 impl eframe::App for RkFlashApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.handle_shortcuts(context);
-        self.process_application();
+        self.refresh_devices();
+        self.process_task_events();
         self.poll_file_dialogs();
         self.render_header(context);
         self.render_status(context);
@@ -368,7 +240,7 @@ impl eframe::App for RkFlashApp {
         self.render_error_toast(context);
         self.render_operation_tip(context);
         self.render_confirmation(context);
-        context.request_repaint_after(if self.application.is_active() {
+        context.request_repaint_after(if self.is_task_running() {
             Duration::from_millis(100)
         } else {
             Duration::from_millis(500)

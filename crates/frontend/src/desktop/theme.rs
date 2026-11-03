@@ -1,6 +1,6 @@
 //! 桌面视觉令牌与中文字体装配。
 
-use super::platform::load_cjk_font;
+use super::font::load_cjk_font;
 use eframe::egui::{self, Color32, FontData, FontDefinitions, FontFamily, FontId, TextStyle};
 
 pub const CANVAS: Color32 = Color32::from_rgb(9, 14, 18);
@@ -23,7 +23,7 @@ pub const DANGER_SOFT: Color32 = Color32::from_rgb(62, 31, 36);
 pub const SUCCESS: Color32 = Color32::from_rgb(89, 214, 143);
 
 /// 应用视觉样式并装配中文字体；返回中文字体是否可用，调用方据此提示用户。
-pub fn install(context: &egui::Context) -> bool {
+pub fn install(context: &egui::Context, cjk_fonts: &[(&str, u32)]) -> bool {
     let mut style = (*context.style()).clone();
     style.visuals.dark_mode = true;
     style.visuals.panel_fill = CANVAS;
@@ -56,11 +56,11 @@ pub fn install(context: &egui::Context) -> bool {
     ]
     .into();
     context.set_style(style);
-    install_cjk_font(context)
+    install_cjk_font(context, cjk_fonts)
 }
 
-fn install_cjk_font(context: &egui::Context) -> bool {
-    let Some(font) = load_cjk_font() else {
+fn install_cjk_font(context: &egui::Context, candidates: &[(&str, u32)]) -> bool {
+    let Some(font) = load_cjk_font(candidates) else {
         // 静默降级会让中文全部渲染成豆腐块；返回状态由调用方提示用户。
         return false;
     };

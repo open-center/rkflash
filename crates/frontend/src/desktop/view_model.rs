@@ -1,4 +1,7 @@
-use rkflash_api::FlashOperation;
+use rkflash_api::{
+    DeviceControl, DownloadRequest, EraseFlashRequest, FirmwareUpgradeRequest, LbaEraseRequest,
+    LbaWriteRequest, LoaderUpgradeRequest,
+};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -13,7 +16,19 @@ pub(super) struct PendingAction {
     pub title: String,
     pub detail: String,
     pub danger: bool,
-    pub operation: FlashOperation,
+    pub action: ConfirmedAction,
+}
+
+/// 需要用户确认后才执行的设备操作，每一项对应一个 API 执行函数。
+#[derive(Clone)]
+pub(super) enum ConfirmedAction {
+    Download(DownloadRequest),
+    UpgradeFirmware(FirmwareUpgradeRequest),
+    EraseFlash(EraseFlashRequest),
+    ControlDevice(DeviceControl),
+    UpgradeLoader(LoaderUpgradeRequest),
+    WriteLba(LbaWriteRequest),
+    EraseLba(LbaEraseRequest),
 }
 
 #[derive(Clone, Copy)]

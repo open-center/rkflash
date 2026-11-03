@@ -9,7 +9,17 @@ const FIRMWARE_STORAGES: [(&str, StorageType); 3] = [
 
 impl RkFlashApp {
     fn firmware_storage_selectable(&self) -> bool {
-        self.application.tool_name() == "rkdeveloptool"
+        !self.tool.firmware_storages.is_empty()
+    }
+
+    fn firmware_kind(&self) -> String {
+        if self.firmware_path.trim().is_empty() {
+            "尚未选择".to_owned()
+        } else if self.firmware_path.to_ascii_lowercase().ends_with(".img") {
+            "Rockchip IMG".to_owned()
+        } else {
+            "未知格式".to_owned()
+        }
     }
 
     pub(in crate::desktop) fn render_upgrade(&mut self, ui: &mut egui::Ui) {
@@ -30,10 +40,7 @@ impl RkFlashApp {
             section_title(
                 ui,
                 "选择统一固件",
-                &format!(
-                    "固件将在任务开始时由 {} 完成格式校验",
-                    self.application.tool_name()
-                ),
+                &format!("固件将在任务开始时由 {} 完成格式校验", self.tool.name),
             );
             ui.horizontal(|ui| {
                 ui.add_sized(
@@ -92,38 +99,22 @@ impl RkFlashApp {
             ui.horizontal_wrapped(|ui| {
                 if ui
                     .add_enabled(
-                        !self.application.is_active() && !self.firmware_path.trim().is_empty(),
+                        !self.is_task_running() && !self.firmware_path.trim().is_empty(),
                         primary_button("开始升级", theme::ACCENT_DARK),
                     )
                     .clicked()
                 {
-                    self.confirm(
-                        "确认升级统一固件",
-                        "升级会重写设备分区。请确认固件型号与目标芯片匹配，并保持 USB 和电源稳定。",
-                        true,
-                        FlashOperation::UpgradeFirmware {
-                            firmware: Path::new(&self.firmware_path).to_path_buf(),
-                            no_reset: self.no_reset_after_upgrade,
-                            storage: FIRMWARE_STORAGES[self.firmware_storage].1,
-                        },
-                    );
+                    self.request_upgrade_firmware(FIRMWARE_STORAGES[self.firmware_storage].1);
                 }
 
                 if ui
                     .add_enabled(
-                        !self.application.is_active() && !self.firmware_path.trim().is_empty(),
+                        !self.is_task_running() && !self.firmware_path.trim().is_empty(),
                         danger_button("擦除 Flash"),
                     )
                     .clicked()
                 {
-                    self.confirm(
-                        "确认擦除 Flash",
-                        "此操作会清除目标存储上的全部数据，无法撤销。",
-                        true,
-                        FlashOperation::EraseFlash {
-                            firmware: Path::new(&self.firmware_path).to_path_buf(),
-                        },
-                    );
+                    self.request_erase_flash();
                 }
 
                 ui.add_enabled(false, egui::Button::new("解包固件"))

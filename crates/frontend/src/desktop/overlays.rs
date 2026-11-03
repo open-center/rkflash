@@ -282,7 +282,7 @@ impl RkFlashApp {
 
         if execute {
             self.pending_action = None;
-            self.run_operation(action.operation);
+            self.run_confirmed(action.action);
         } else if cancel {
             self.pending_action = None;
         }

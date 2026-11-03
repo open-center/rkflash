@@ -1,5 +1,5 @@
 # rkflash 统一入口：版本管理与两个平台的构建、检查、打包。
-# 各平台的完整能力分别由 packaging/linux/build.sh、packaging/windows/Makefile 与 macos/Makefile 提供，这里只做汇总。
+# 各平台的完整能力分别由 platforms/linux/packaging/build.sh、platforms/windows/packaging/Makefile 与 platforms/macos/Makefile 提供，这里只做汇总。
 # 统一命名的安装包输出到 dist/，与 GitHub Release 中的文件名一致。
 
 .DEFAULT_GOAL := help
@@ -18,7 +18,7 @@ help:
 	@echo
 	@echo "  make version-check        检查 Rust 工作区与 macOS 版本是否与 VERSION 一致"
 	@echo "  make set-version V=X.Y.Z  修改统一版本号并同步到两个平台"
-	@echo "  make linux                构建 .deb（需要 Docker 和 packaging/linux/tools/upgrade_tool）"
+	@echo "  make linux                构建 .deb（需要 Docker 和 platforms/linux/packaging/tools/upgrade_tool）"
 	@echo "  make linux-check          Linux 格式、架构、测试、Clippy"
 	@echo "  make macos                构建当前架构的 .dmg（MAC_ARCH=arm64|x86_64）"
 	@echo "  make macos-check          macOS 构建与单元测试"
@@ -38,29 +38,29 @@ set-version:
 	@$(ROOT)/scripts/version.sh set $(V)
 
 linux: version-check
-	$(ROOT)/packaging/linux/build.sh build
+	$(ROOT)/platforms/linux/packaging/build.sh build
 	@mkdir -p $(DIST)
 	cp $(ROOT)/output/dist/rkflash_$(VERSION)_amd64.deb $(DIST)/rkflash-$(VERSION)-linux-amd64.deb
 	@ls -l $(DIST)
 
 linux-check:
-	$(ROOT)/packaging/linux/build.sh check
+	$(ROOT)/platforms/linux/packaging/build.sh check
 
 macos: version-check
-	$(MAKE) -C $(ROOT)/macos ARCH=$(MAC_ARCH) dmg
+	$(MAKE) -C $(ROOT)/platforms/macos ARCH=$(MAC_ARCH) dmg
 	@mkdir -p $(DIST)
-	cp $(ROOT)/macos/build/dist/RKFlash-$(VERSION)-$(MAC_ARCH).dmg $(DIST)/rkflash-$(VERSION)-macos-$(MAC_ARCH).dmg
+	cp $(ROOT)/platforms/macos/build/dist/RKFlash-$(VERSION)-$(MAC_ARCH).dmg $(DIST)/rkflash-$(VERSION)-macos-$(MAC_ARCH).dmg
 	@ls -l $(DIST)
 
 macos-check:
-	$(MAKE) -C $(ROOT)/macos ARCH=$(MAC_ARCH) check
+	$(MAKE) -C $(ROOT)/platforms/macos ARCH=$(MAC_ARCH) check
 
 WIN_CROSS ?=
 
 windows: version-check
-	$(MAKE) -C $(ROOT)/packaging/windows package CROSS=$(WIN_CROSS)
+	$(MAKE) -C $(ROOT)/platforms/windows/packaging package CROSS=$(WIN_CROSS)
 	@mkdir -p $(DIST)
-	cp $(ROOT)/packaging/windows/build/dist/rkflash-$(VERSION)-windows-x64-setup.exe $(ROOT)/packaging/windows/build/dist/rkflash-$(VERSION)-windows-x64.zip $(DIST)/
+	cp $(ROOT)/platforms/windows/packaging/build/dist/rkflash-$(VERSION)-windows-x64-setup.exe $(ROOT)/platforms/windows/packaging/build/dist/rkflash-$(VERSION)-windows-x64.zip $(DIST)/
 	@ls -l $(DIST)
 
 check: version-check
@@ -72,6 +72,6 @@ endif
 
 clean:
 	rm -rf $(DIST)
-	$(MAKE) -C $(ROOT)/macos clean 2>/dev/null || true
-	$(MAKE) -C $(ROOT)/packaging/windows clean
-	$(ROOT)/packaging/linux/build.sh clean
+	$(MAKE) -C $(ROOT)/platforms/macos clean 2>/dev/null || true
+	$(MAKE) -C $(ROOT)/platforms/windows/packaging clean
+	$(ROOT)/platforms/linux/packaging/build.sh clean

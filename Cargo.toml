@@ -7,8 +7,8 @@ members = [
     "crates/application",
     "crates/runtime",
     "crates/frontend",
-    "crates/platforms/linux",
-    "crates/platforms/windows",
+    "platforms/linux",
+    "platforms/windows",
     "crates/launcher",
 ]
 default-members = ["crates/launcher"]
@@ -32,8 +32,8 @@ rkflash-application = { path = "crates/application" }
 rkflash-config = { path = "crates/config" }
 rkflash-core = { path = "crates/core" }
 rkflash-frontend = { path = "crates/frontend" }
-rkflash-platform-linux = { path = "crates/platforms/linux" }
-rkflash-platform-windows = { path = "crates/platforms/windows" }
+rkflash-platform-linux = { path = "platforms/linux" }
+rkflash-platform-windows = { path = "platforms/windows" }
 rkflash-runtime = { path = "crates/runtime" }
 
 [profile.release]

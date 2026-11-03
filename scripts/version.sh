@@ -11,7 +11,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 VERSION_FILE="$ROOT/VERSION"
 CARGO_TOML="$ROOT/Cargo.toml"
 CARGO_LOCK="$ROOT/Cargo.lock"
-INFO_PLIST="$ROOT/macos/Resources/Info.plist"
+INFO_PLIST="$ROOT/platforms/macos/Resources/Info.plist"
 # Cargo.lock 中没有 source 字段的条目就是本工作区的 crate，版本随工作区一起变化；
 # 按此规则识别，新增或拆分 crate 时无需修改本脚本。
 WORKSPACE_ENTRY='\[\[package\]\]\nname = "(rkflash[\w-]*)"\nversion = "([^"]*)"\n(?!source)'
@@ -46,7 +46,7 @@ check() {
         [[ "${line#*=}" == "$v" ]] || { echo "Cargo.lock: $line != $v"; failed=1; }
     done < <(lock_versions)
     [[ $(lock_versions | wc -l) -gt 0 ]] || { echo "Cargo.lock: 未找到工作区 crate"; failed=1; }
-    [[ "$(plist_version)" == "$v" ]] || { echo "macos/Info.plist: $(plist_version) != $v"; failed=1; }
+    [[ "$(plist_version)" == "$v" ]] || { echo "platforms/macos/Resources/Info.plist: $(plist_version) != $v"; failed=1; }
     ((failed == 0)) || die "版本不一致，请执行 scripts/version.sh set $v"
     echo "版本一致：$v"
 }
