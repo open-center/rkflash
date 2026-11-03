@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "rkflash"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "rkflash-frontend",
  "rkflash-platform-linux",
@@ -2618,14 +2618,14 @@ dependencies = [
 
 [[package]]
 name = "rkflash-api"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "rkflash-config",
 ]
 
 [[package]]
 name = "rkflash-application"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "rkflash-api",
  "rkflash-config",
@@ -2634,7 +2634,7 @@ dependencies = [
 
 [[package]]
 name = "rkflash-config"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2642,11 +2642,11 @@ dependencies = [
 
 [[package]]
 name = "rkflash-core"
-version = "0.4.1"
+version = "0.5.0"
 
 [[package]]
 name = "rkflash-frontend"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "eframe",
  "image",
@@ -2656,7 +2656,7 @@ dependencies = [
 
 [[package]]
 name = "rkflash-platform-linux"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "libc",
  "rkflash-application",
@@ -2667,7 +2667,7 @@ dependencies = [
 
 [[package]]
 name = "rkflash-platform-windows"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "rkflash-application",
  "rkflash-config",
@@ -2678,7 +2678,7 @@ dependencies = [
 
 [[package]]
 name = "rkflash-runtime"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "rkflash-application",
  "rkflash-config",
