@@ -4,15 +4,15 @@
 //! 烧录工具都通过 [`ports`] 中的接口注入，由通用运行时与各平台层实现。
 
 pub mod domain;
-mod facade;
 mod image_resolution;
 pub mod ports;
 mod profile;
+mod service;
 mod validation;
 
-pub use facade::{ApplicationPorts, FlashApplication};
 pub use ports::{
     DeviceMonitor, FileSystem, FlashPlanner, FlashProfile, OperationExecutor, OperationLog,
     ToolLocator, ToolProtocol, WorkspaceRepository,
 };
 pub use profile::RockchipImageProfile;
+pub use service::{ApplicationPorts, FlashApplication};

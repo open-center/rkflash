@@ -66,21 +66,20 @@ impl RkFlashApp {
                     .color(theme::MUTED_DARK),
             );
             if ui.button("加载 parameter").clicked() {
-                self.load_parameter_file();
+                self.pick_parameter_file();
             }
             if ui.button("导入配置").clicked() {
-                self.import_workspace();
+                self.pick_workspace_import();
             }
             if ui.button("导出配置").clicked() {
-                self.export_workspace();
+                self.pick_workspace_export();
             }
             if ui.button("设备分区表").clicked() {
-                self.run_query(DeviceQuery::PartitionTable);
+                self.read_partition_table();
             }
             ui.separator();
             if ui.button("恢复默认").clicked() {
-                self.images = self.application.default_images();
-                self.selected_image = None;
+                self.restore_default_images();
             }
             if ui
                 .add(egui::Button::new(
@@ -277,7 +276,7 @@ impl RkFlashApp {
     fn render_start_download(&mut self, ui: &mut egui::Ui, width: f32) {
         if ui
             .add_enabled(
-                !self.application.is_active(),
+                !self.is_task_running(),
                 egui::Button::new(RichText::new("开始下载").strong().color(Color32::WHITE))
                     .fill(theme::ACCENT_DARK)
                     .stroke(Stroke::new(1.0_f32, theme::ACCENT))
@@ -285,15 +284,7 @@ impl RkFlashApp {
             )
             .clicked()
         {
-            self.confirm(
-                "确认写入镜像",
-                "将按当前顺序写入所有已勾选项。错误的镜像或地址可能导致设备无法启动。",
-                true,
-                FlashOperation::DownloadImages {
-                    images: self.images.clone(),
-                    reset_after: self.reset_after_download,
-                },
-            );
+            self.request_download();
         }
     }
 
@@ -312,6 +303,24 @@ impl RkFlashApp {
             self.images.remove(index);
             self.selected_image = None;
         }
+    }
+}
+
+impl RkFlashApp {
+    fn can_move_selected(&self, offset: isize) -> bool {
+        self.selected_image.is_some_and(|index| {
+            let target = index as isize + offset;
+            target >= 0 && target < self.images.len() as isize
+        })
+    }
+
+    fn move_selected(&mut self, offset: isize) {
+        let Some(index) = self.selected_image else {
+            return;
+        };
+        let target = (index as isize + offset) as usize;
+        self.images.swap(index, target);
+        self.selected_image = Some(target);
     }
 }
 

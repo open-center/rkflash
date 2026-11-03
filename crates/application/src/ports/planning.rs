@@ -1,15 +1,11 @@
-use crate::domain::{CommandSpec, DeviceSnapshot, ExecutionPlan, FlashOperation};
+use crate::domain::{CommandSpec, DeviceSnapshot, ExecutionPlan, FlashOperation, ToolInfo};
 use rkflash_config::ImageEntry;
 
 /// 只在 UI 线程使用，不要求跨线程共享；`ToolProtocol` 才是后台线程依赖的端口。
 pub trait FlashPlanner {
     fn plan(&self, operation: &FlashOperation) -> Result<ExecutionPlan, String>;
-    /// 当前外部工具是否支持该操作；前端据此禁用对应按钮。
-    fn supports(&self, _operation: &FlashOperation) -> bool {
-        true
-    }
-    /// 界面中显示的外部工具名称。
-    fn tool_name(&self) -> &'static str;
+    /// 外部工具的名称与能力；应用层据此拒绝不支持的操作，前端据此禁用对应入口。
+    fn tool_info(&self) -> ToolInfo;
 }
 
 /// 只在 UI 线程使用，不要求跨线程共享。

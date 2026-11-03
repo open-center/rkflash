@@ -2,4 +2,4 @@
 /dist/
 /output/
 *.rkflash.json
-/packaging/linux/tools/upgrade_tool
+/platforms/linux/packaging/tools/upgrade_tool

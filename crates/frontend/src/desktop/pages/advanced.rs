@@ -66,21 +66,15 @@ impl RkFlashApp {
                         }
                         if ui
                             .add_enabled(
-                                !self.application.is_active()
+                                !self.is_task_running()
                                     && !self.output_path.trim().is_empty()
-                                    && self.application.supports(
-                                        &FlashOperation::ExportSerialLog {
-                                            output: PathBuf::new(),
-                                        },
-                                    ),
+                                    && self.tool.serial_log,
                                 egui::Button::new("开始导出"),
                             )
                             .on_disabled_hover_text(UNSUPPORTED_HINT)
                             .clicked()
                         {
-                            self.run_operation(FlashOperation::ExportSerialLog {
-                                output: Path::new(&self.output_path).to_path_buf(),
-                            });
+                            self.export_serial_log();
                         }
                     });
                 });
@@ -88,15 +82,8 @@ impl RkFlashApp {
                 ui.add_space(12.0);
                 card().show(ui, |ui| {
                     section_title(ui, "工具运行日志", "每次操作单独归档，文件名使用本地时间戳");
-                    let active = self.application.is_active();
-                    let operation_log = self.application.operation_log_path().map(|path| {
-                        (
-                            path.file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| path.display().to_string()),
-                            path.display().to_string(),
-                        )
-                    });
+                    let active = self.is_task_running();
+                    let operation_log = self.operation_log_display();
 
                     inset().show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -185,7 +172,7 @@ impl RkFlashApp {
                             .clicked()
                         {
                             let path = PathBuf::from(self.tool_log_directory.trim());
-                            self.apply_tool_log_directory(path);
+                            self.set_tool_log_directory(path);
                         }
                     });
                     ui.horizontal_wrapped(|ui| {
@@ -251,33 +238,24 @@ impl RkFlashApp {
                 "仅升级当前设备的 Loader，不主动切换设备模式",
             );
             if path_picker(ui, &mut self.loader_path, "MiniLoaderAll.bin") {
-                let spec = FileDialogSpec::pick_file(
-                    "选择 Loader 文件",
-                    "Loader 镜像",
-                    &["bin", "img"],
-                );
+                let spec =
+                    FileDialogSpec::pick_file("选择 Loader 文件", "Loader 镜像", &["bin", "img"]);
                 self.spawn_file_dialog(spec, FileDialogTarget::LoaderBinary);
             }
             ui.horizontal_wrapped(|ui| {
                 egui::ComboBox::from_id_salt("loader_storage")
-                    .selected_text(
-                        ["自动", "eMMC", "SPI NOR", "SPI NAND"][self.loader_storage],
-                    )
+                    .selected_text(["自动", "eMMC", "SPI NOR", "SPI NAND"][self.loader_storage])
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.loader_storage, 0, "自动");
                         ui.selectable_value(&mut self.loader_storage, 1, "eMMC");
                         ui.selectable_value(&mut self.loader_storage, 2, "SPI NOR");
-                        let spi_nand = FlashOperation::UpgradeLoader {
-                            loader: PathBuf::new(),
-                            storage: StorageType::SpiNand,
-                        };
-                        if self.application.supports(&spi_nand) {
+                        if self.tool.loader_storages.contains(&StorageType::SpiNand) {
                             ui.selectable_value(&mut self.loader_storage, 3, "SPI NAND");
                         }
                     });
                 if ui
                     .add_enabled(
-                        !self.application.is_active() && !self.loader_path.trim().is_empty(),
+                        !self.is_task_running() && !self.loader_path.trim().is_empty(),
                         egui::Button::new(RichText::new("升级 Loader").color(theme::WARNING)),
                     )
                     .clicked()
@@ -288,15 +266,7 @@ impl RkFlashApp {
                         StorageType::SpiNor,
                         StorageType::SpiNand,
                     ][self.loader_storage];
-                    self.confirm(
-                        "确认升级 Loader",
-                        "Loader 必须与芯片和存储类型匹配。写入错误 Loader 可能导致设备只能通过 Maskrom 恢复。",
-                        true,
-                        FlashOperation::UpgradeLoader {
-                            loader: Path::new(&self.loader_path).to_path_buf(),
-                            storage,
-                        },
-                    );
+                    self.request_upgrade_loader(storage);
                 }
             });
         });
@@ -318,7 +288,7 @@ impl RkFlashApp {
             }
             ui.horizontal_wrapped(|ui| {
                 if ui
-                    .add_enabled(!self.application.is_active(), egui::Button::new("读取 LBA"))
+                    .add_enabled(!self.is_task_running(), egui::Button::new("读取 LBA"))
                     .clicked()
                 {
                     if self.lba_image_path.trim().is_empty() {
@@ -335,46 +305,79 @@ impl RkFlashApp {
                             FileDialogTarget::LbaExport,
                         );
                     } else {
-                        self.run_operation(FlashOperation::ReadLba {
-                            start: self.lba_start.clone(),
-                            count: self.lba_count.clone(),
-                            output: Path::new(&self.lba_image_path).to_path_buf(),
-                        });
+                        self.read_lba(PathBuf::from(&self.lba_image_path));
                     }
                 }
                 if ui
                     .add_enabled(
-                        !self.application.is_active() && !self.lba_image_path.trim().is_empty(),
+                        !self.is_task_running() && !self.lba_image_path.trim().is_empty(),
                         egui::Button::new(RichText::new("写入 LBA").color(theme::WARNING))
                             .fill(theme::WARNING_SOFT),
                     )
                     .clicked()
                 {
-                    self.confirm(
-                        "确认写入 LBA",
-                        "将从指定扇区开始写入镜像，请再次核对起始地址。",
-                        true,
-                        FlashOperation::WriteLba {
-                            start: self.lba_start.clone(),
-                            image: Path::new(&self.lba_image_path).to_path_buf(),
-                        },
-                    );
+                    self.request_write_lba();
                 }
                 if ui
-                    .add_enabled(!self.application.is_active(), danger_button("擦除 LBA"))
+                    .add_enabled(!self.is_task_running(), danger_button("擦除 LBA"))
                     .clicked()
                 {
-                    self.confirm(
-                        "确认擦除 LBA",
-                        "指定范围的数据将被永久擦除。",
-                        true,
-                        FlashOperation::EraseLba {
-                            start: self.lba_start.clone(),
-                            count: self.lba_count.clone(),
-                        },
-                    );
+                    self.request_erase_lba();
                 }
             });
         });
+    }
+
+    fn query_button(&mut self, ui: &mut egui::Ui, label: &str, query: DeviceQuery) {
+        let supported = self.tool.queries.contains(&query);
+        if ui
+            .add_enabled(
+                supported && !self.is_task_running(),
+                egui::Button::new(RichText::new(label).color(theme::TEXT))
+                    .fill(theme::PANEL_RAISED)
+                    .stroke(Stroke::new(1.0_f32, theme::BORDER)),
+            )
+            .on_disabled_hover_text(UNSUPPORTED_HINT)
+            .clicked()
+        {
+            self.query_device(query);
+        }
+    }
+
+    fn control_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        control: DeviceControl,
+        confirm: bool,
+    ) {
+        let supported = self.tool.controls.contains(&control);
+        if ui
+            .add_enabled(
+                supported && !self.is_task_running(),
+                egui::Button::new(RichText::new(label).color(if confirm {
+                    theme::WARNING
+                } else {
+                    theme::TEXT
+                }))
+                .fill(if confirm {
+                    theme::WARNING_SOFT
+                } else {
+                    theme::PANEL_RAISED
+                })
+                .stroke(Stroke::new(
+                    1.0_f32,
+                    if confirm {
+                        theme::WARNING
+                    } else {
+                        theme::BORDER
+                    },
+                )),
+            )
+            .on_disabled_hover_text(UNSUPPORTED_HINT)
+            .clicked()
+        {
+            self.request_control_device(control, confirm);
+        }
     }
 }

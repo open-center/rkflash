@@ -2662,6 +2662,7 @@ dependencies = [
  "rkflash-application",
  "rkflash-config",
  "rkflash-core",
+ "rkflash-frontend",
  "rkflash-runtime",
 ]
 
@@ -2672,6 +2673,7 @@ dependencies = [
  "rkflash-application",
  "rkflash-config",
  "rkflash-core",
+ "rkflash-frontend",
  "rkflash-runtime",
  "windows-sys 0.59.0",
 ]

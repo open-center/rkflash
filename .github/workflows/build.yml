@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
-  # Rockchip 闭源 upgrade_tool：固定上游提交，构建脚本再按 packaging/linux/files/upgrade_tool.sha256 校验。
+  # Rockchip 闭源 upgrade_tool：固定上游提交，构建脚本再按 platforms/linux/packaging/files/upgrade_tool.sha256 校验。
   UPGRADE_TOOL_URL: https://raw.githubusercontent.com/vicharak-in/Linux_Upgrade_Tool/266e4c0f59d36a5f9b395a78255d6af04222279c/upgrade_tool
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Fetch upgrade_tool
-        working-directory: packaging/linux
+        working-directory: platforms/linux/packaging
         run: |
           mkdir -p tools
           curl -fsSL --retry 3 -o tools/upgrade_tool "$UPGRADE_TOOL_URL"

@@ -88,7 +88,7 @@ impl RkFlashApp {
 
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         // 只查一次工具路径，hover 提示与按钮文案共用结果。
-                        let tool_path = self.application.tool_path();
+                        let tool_path = self.tool_path();
                         let configured = tool_path.is_some();
                         let button_text = if configured {
                             "工具就绪"
@@ -127,15 +127,12 @@ impl RkFlashApp {
                                 tool_path
                                     .map(|path| path.display().to_string())
                                     .unwrap_or_else(|| {
-                                        format!(
-                                            "未找到 {}，点击手动选择",
-                                            self.application.tool_name()
-                                        )
+                                        format!("未找到 {}，点击手动选择", self.tool.name)
                                     }),
                             )
                             .clicked()
                         {
-                            self.pick_upgrade_tool();
+                            self.pick_tool();
                         }
                     });
                 });
@@ -232,7 +229,7 @@ impl RkFlashApp {
                     ui.separator();
                     ui.label(RichText::new(&self.status_text).color(theme::MUTED));
 
-                    if self.application.is_active() {
+                    if self.is_task_running() {
                         ui.add_space(8.0);
                         ui.add(
                             egui::ProgressBar::new(self.progress)
@@ -247,7 +244,7 @@ impl RkFlashApp {
                                 .color(theme::MUTED)
                                 .small(),
                         );
-                        if self.application.is_active()
+                        if self.is_task_running()
                             && ui
                                 .add(
                                     egui::Button::new(
@@ -257,8 +254,7 @@ impl RkFlashApp {
                                 )
                                 .clicked()
                         {
-                            self.application.cancel();
-                            self.push_log(LogLevel::Warning, "正在请求停止当前任务……");
+                            self.cancel_task();
                         }
                     });
                 });
@@ -293,7 +289,7 @@ impl RkFlashApp {
 
     pub(super) fn render_logs(&mut self, context: &egui::Context) {
         let operation_log = self.operation_log_display();
-        let active = self.application.is_active();
+        let active = self.is_task_running();
         egui::TopBottomPanel::bottom("operation_logs")
             .resizable(self.logs_expanded)
             .default_height(if self.logs_expanded { 176.0 } else { 46.0 })

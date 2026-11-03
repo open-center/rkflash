@@ -1,4 +1,4 @@
 # Linux 构建镜像只需要工具链版本和容器入口；源码在运行时以卷挂载，不进入镜像。
 *
 !rust-toolchain.toml
-!packaging/linux/scripts/docker-entrypoint.sh
+!platforms/linux/packaging/scripts/docker-entrypoint.sh

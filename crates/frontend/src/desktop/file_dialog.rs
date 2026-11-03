@@ -121,4 +121,37 @@ impl RkFlashApp {
             }
         }
     }
+
+    /// 后台文件对话框完成后的结果分发；只在用户确实选择了路径时调用。
+    fn apply_file_dialog_result(&mut self, target: &FileDialogTarget, path: PathBuf) {
+        match target {
+            FileDialogTarget::ToolExecutable => self.set_tool_path(path),
+            FileDialogTarget::ParameterFile => self.import_parameter(path),
+            FileDialogTarget::WorkspaceExport => self.save_workspace(path),
+            FileDialogTarget::WorkspaceImport => self.load_workspace(path),
+            FileDialogTarget::FirmwareImage => {
+                self.firmware_path = path.display().to_string();
+            }
+            FileDialogTarget::DownloadImage(index) => {
+                if let Some(entry) = self.images.get_mut(*index) {
+                    entry.path = path.display().to_string();
+                    entry.enabled = true;
+                }
+            }
+            FileDialogTarget::LoaderBinary => {
+                self.loader_path = path.display().to_string();
+            }
+            FileDialogTarget::LbaImage => {
+                self.lba_image_path = path.display().to_string();
+            }
+            FileDialogTarget::LbaExport => {
+                self.lba_image_path = path.display().to_string();
+                self.read_lba(path);
+            }
+            FileDialogTarget::SerialLogOutput => {
+                self.output_path = path.display().to_string();
+            }
+            FileDialogTarget::ToolLogDirectory => self.set_tool_log_directory(path),
+        }
+    }
 }
