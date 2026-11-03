@@ -77,7 +77,7 @@ stage: core driver app
 	rm -rf $(BUILD_DIR)/stage
 	mkdir -p $(STAGE)/driver $(STAGE)/licenses
 	cp $(APP_EXE) $(RK_TOOL) $(REPO)/assets/icons/rkflash.ico $(STAGE)/
-	cp $(DRIVER_DIR)/wdi-simple.exe $(ROOT)/driver/install-driver.ps1 $(STAGE)/driver/
+	cp $(DRIVER_DIR)/wdi-simple.exe $(ROOT)/driver/install-driver.ps1 $(ROOT)/driver/rockchip-pids.txt $(STAGE)/driver/
 	cp $(ROOT)/package/README.txt $(ROOT)/package/install-driver.cmd $(STAGE)/
 	cp $(ROOT)/package/NOTICE.txt $(STAGE)/licenses/NOTICE.txt
 	cp $(REPO)/crates/LICENSE $(STAGE)/licenses/RKFlash-MIT.txt

@@ -92,7 +92,7 @@ Section "RKFlash 主程序" SecApp
 SectionEnd
 
 Section "Rockchip USB 驱动（WinUSB）" SecDriver
-  DetailPrint "正在安装 WinUSB 驱动，可能需要两三分钟……"
+  DetailPrint "正在安装 WinUSB 驱动，约需半分钟……"
   nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\driver\install-driver.ps1" -Quiet'
   Pop $0
   ${If} $0 != 0
